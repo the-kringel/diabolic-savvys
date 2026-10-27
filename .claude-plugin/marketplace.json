@@ -1,0 +1,21 @@
+{
+  "name": "diabolic-savvys",
+  "owner": { "name": "the-kringel", "url": "https://github.com/the-kringel" },
+  "metadata": { "description": "savvy-flow and savvy-progress, tuned toward Opus on medium effort, with Sonnet swarm workers and a Sonnet tester, every one of them dressed as a Diablo 2 hero." },
+  "plugins": [
+    {
+      "name": "savvy-flow",
+      "source": "./plugins/savvy-flow",
+      "description": "Skill: plan, delegate to tiered worker subagents (Opus medium by default, Sonnet swarm and tester), review.",
+      "version": "1.3.0",
+      "category": "skill"
+    },
+    {
+      "name": "savvy-progress",
+      "source": "./plugins/savvy-progress",
+      "description": "Mod: progress bar above the prompt and a live agents panel where every worker is a Diablo 2 hero crab.",
+      "version": "1.3.0",
+      "category": "mod"
+    }
+  ]
+}

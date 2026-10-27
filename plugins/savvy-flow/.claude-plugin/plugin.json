@@ -1,0 +1,17 @@
+{
+  "name": "savvy-flow",
+  "version": "1.3.0",
+  "description": "Orchestrated delivery flow: the session model plans, owns design and reviews; tiered workers implement. Opus on medium effort is the default tier, Opus on high the ceiling; Sonnet swarm workers fan out in parallel and a Sonnet tester checks the results. Pairs with savvy-progress.",
+  "author": {
+    "name": "the-kringel",
+    "url": "https://github.com/the-kringel"
+  },
+  "homepage": "https://github.com/the-kringel/diabolic-savvys/tree/main/plugins/savvy-flow",
+  "repository": "https://github.com/the-kringel/diabolic-savvys",
+  "license": "MIT",
+  "keywords": [
+    "skill",
+    "orchestration",
+    "subagents"
+  ]
+}
