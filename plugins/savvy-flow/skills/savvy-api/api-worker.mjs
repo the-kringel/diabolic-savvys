@@ -83,12 +83,18 @@ const env = { ...process.env, ANTHROPIC_API_KEY: process.env.SAVVY_API_KEY }
 delete env.CLAUDE_CODE_OAUTH_TOKEN
 delete env.SAVVY_API_KEY
 
+// The prompt goes by file: on Windows `claude` is a .cmd shim, spawned through
+// cmd.exe, which cuts a multi-line argument short.
+const promptFile = join(dir, `${id}.prompt.md`)
+writeFileSync(promptFile, body.replace(/^- Progress reporting:.*$/m, ''))
+const q = s => (process.platform === 'win32' ? `"${s}"` : s)
+
 const cli = [
   '-p',
   '--output-format', 'stream-json',
   '--verbose',
   '--model', model,
-  '--append-system-prompt', body.replace(/^- Progress reporting:.*$/m, ''),
+  '--append-system-prompt-file', q(promptFile),
   '--permission-mode', args['permission-mode'] ?? 'acceptEdits',
 ]
 if (effort) cli.push('--effort', effort)
