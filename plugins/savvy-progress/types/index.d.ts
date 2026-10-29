@@ -38,6 +38,8 @@ export type AgentRun = {
   stepDone?: number
   stepTotal?: number
   stepNote?: string
+  /** A headless worker on API credit, read from .claude/api-workers by the savvy-api skill. */
+  isApi?: boolean
 }
 
 export type Panel = {
