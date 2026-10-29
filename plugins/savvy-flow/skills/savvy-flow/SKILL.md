@@ -91,6 +91,7 @@ Heuristics:
 ## 4. Delegate
 
 - Use the Agent tool with `subagent_type` = the tier agent name exactly as the Agent tool lists it (`savvy-careful` or `savvy-flow:savvy-careful`). Run independent tasks in parallel in one message; chain dependent ones.
+- API credit: when the `savvy-api` skill is active in this session, delegate through its runner instead of the Agent tool (same tier, brief and title), and fall back to the Agent tool as that skill says once the credit is gone.
 - Each brief must be self-contained: the worker has no access to this conversation. Include file paths, the decided design specs, constraints from CLAUDE.md that matter, and the exact verification expected.
 - Keep briefs tight. Do not paste the whole plan; paste this task.
 ### Swarming

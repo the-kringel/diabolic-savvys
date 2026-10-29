@@ -5,3 +5,4 @@ node_modules/
 **/.claude-plugin/types/
 tsconfig.json
 
+.claude/api-workers/

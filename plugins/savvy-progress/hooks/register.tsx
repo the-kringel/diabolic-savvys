@@ -386,7 +386,8 @@ const tierModel = (tier: string): string => {
 }
 
 // "Opus 5.5 · low" for a run, or just the model when no effort was seen.
-const runModel = (a: AgentRun): string => (a.effort ? `${modelName(a.model)} · ${effortWord(a.effort)}` : modelName(a.model))
+const runModel = (a: AgentRun): string =>
+  (a.effort ? `${modelName(a.model)} · ${effortWord(a.effort)}` : modelName(a.model)) + (a.isApi ? ' · API' : '')
 
 // USD per million tokens: input, output, cache read, cache write. The first row that
 // matches a model id wins, so a release sits above its family.
@@ -954,7 +955,7 @@ const agentSvg = (W: number, a: AgentRun, at: number): string => {
   const barW = textW
   const progress = progressOf(a)
   const stats = `${s.ctx} ${ctx}% · ${fmtTokens(a.contextTokens)}  ≈${fmtCost(a.costUsd)}  ${fmtTime(elapsed(a, at))}`
-  const steps = a.stepTotal ? `${a.stepDone ?? 0}/${a.stepTotal}${a.stepNote ? ' · ' + a.stepNote : ''}` : ''
+  const steps = a.stepTotal ? `${a.stepDone ?? 0}/${a.stepTotal}${a.stepNote ? ' · ' + a.stepNote : ''}` : a.stepNote ?? ''
   const stepsW = Math.max(0, barW - textWidth(stats, 11) - 12)
   // Without reported steps the bar falls back to the context, drawn grey.
   const fillW = Math.round(barW * (progress ?? ctx / 100))
@@ -1039,6 +1040,60 @@ async function autoOpen($: EngineInterface, key: string): Promise<void> {
   void $.ui.open({ id: PANE, title: tr().pane })
 }
 
+// Headless `claude -p` workers run by the savvy-api skill on API credit: they are
+// outside this session, so their runner keeps a JSON file per run and the panel
+// reads them as rows of their own.
+const API_DIR = '.claude/api-workers'
+const API_STALE_MS = 15 * 60 * 1000
+const apiSeen = new Map<string, number>()
+
+async function syncApiWorkers($: EngineInterface): Promise<void> {
+  if (!(await $.fs.exists(API_DIR).catch(() => false))) return
+  const entries = await $.fs.list(API_DIR).catch(() => [])
+  const changed: AgentRun[] = []
+  const at = await $.clock.now()
+  for (const ent of entries) {
+    if (ent.kind !== 'file' || !ent.name.endsWith('.json')) continue
+    if (apiSeen.get(ent.name) === ent.mtimeMs) continue
+    let w: Record<string, unknown>
+    try {
+      w = JSON.parse(String(await $.fs.read(`${API_DIR}/${ent.name}`)))
+    } catch {
+      continue // mid-write or not ours; the next tick reads it again
+    }
+    apiSeen.set(ent.name, ent.mtimeMs)
+    const model = String(w.model ?? 'opus')
+    const isStale = w.status === 'running' && at - Number(w.updatedAt ?? at) > API_STALE_MS
+    changed.push({
+      id: `api:${String(w.id)}`,
+      type: String(w.type ?? 'savvy-medium'),
+      description: String(w.description ?? '').slice(0, MAX_TITLE),
+      model,
+      effort: typeof w.effort === 'string' ? w.effort : undefined,
+      status: isStale ? 'failed' : w.status === 'done' ? 'done' : w.status === 'failed' ? 'failed' : 'running',
+      startedAt: Number(w.startedAt ?? at),
+      endedAt: w.endedAt ? Number(w.endedAt) : isStale ? Number(w.updatedAt) : undefined,
+      contextTokens: Number(w.contextTokens ?? 0),
+      contextMax: windowOf(model),
+      tokens: Number(w.tokens ?? 0),
+      costUsd: Number(w.costUsd ?? 0),
+      steps: Number(w.steps ?? 0),
+      round: 1,
+      stepNote: typeof w.stepNote === 'string' ? w.stepNote.slice(0, MAX_TITLE) : undefined,
+      isApi: true,
+    })
+  }
+  if (!changed.length) return
+  const ids = new Set(changed.map(a => a.id))
+  const isNew = changed.some(a => a.status === 'running')
+  await update($, agents, list => [...list.filter(a => !ids.has(a.id)), ...changed].slice(-200))
+  await update($, now, () => at)
+  if (isNew) {
+    const f = await read($, flow)
+    await autoOpen($, f && !f.isFinished ? f.title : 'savvy-flow')
+  }
+}
+
 export const register: Register = (on, options) => {
   on('session.start', async ($, e, next) => {
     const started = await next(e)
@@ -1098,9 +1153,12 @@ export const register: Register = (on, options) => {
       description: 'Show or hide the panel of subagents: running, finished and planned, with model, context, cost and time',
     })
 
-    // Ticks the running agents' clocks; quiet when nothing runs.
+    // Ticks the running agents' clocks; quiet when nothing runs. Every other
+    // tick also picks up the API-credit workers the savvy-api runner writes.
+    let tick = 0
     $.clock.every(1000, () => {
       void (async () => {
+        if (tick++ % 2 === 0) await syncApiWorkers($)
         const list = await read($, agents)
         if (!list.some(a => a.status === 'running')) return
         const at = await $.clock.now()
@@ -1371,7 +1429,7 @@ export const register: Register = (on, options) => {
       const ctx = ctxOf(a)
       const progress = progressOf(a)
       const model = runModel(a)
-      const steps = a.stepTotal ? `${a.stepDone ?? 0}/${a.stepTotal}${a.stepNote ? ' ' + a.stepNote : ''} · ` : ''
+      const steps = a.stepTotal ? `${a.stepDone ?? 0}/${a.stepTotal}${a.stepNote ? ' ' + a.stepNote : ''} · ` : a.stepNote ? `${a.stepNote} · ` : ''
       return (
         <Box key={a.id} flexDirection="column" marginBottom={1}>
           <Box flexDirection="row" gap={1}>
