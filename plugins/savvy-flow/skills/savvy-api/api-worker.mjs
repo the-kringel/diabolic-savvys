@@ -79,8 +79,16 @@ const save = () => {
 }
 save()
 
+// The worker must be a plain API-key session: a parent session (the desktop app
+// above all) sets ANTHROPIC_BASE_URL to its own subscription endpoint and its
+// account and session ids, and a worker that inherits them is billed there.
 const env = { ...process.env, ANTHROPIC_API_KEY: process.env.SAVVY_API_KEY }
-delete env.CLAUDE_CODE_OAUTH_TOKEN
+for (const k of Object.keys(env)) {
+  if (/^(CLAUDECODE|CLAUDE_PID|CLAUDE_EFFORT|ANTHROPIC_BASE_URL|ANTHROPIC_AUTH_TOKEN)$/.test(k)) delete env[k]
+  else if (k.startsWith('CLAUDE_CODE_') && k !== 'CLAUDE_CODE_PLUGIN_DIRS') delete env[k]
+  else if (k.startsWith('CLAUDE_AGENT_SDK_')) delete env[k]
+}
+if (process.env.SAVVY_API_BASE_URL) env.ANTHROPIC_BASE_URL = process.env.SAVVY_API_BASE_URL
 delete env.SAVVY_API_KEY
 
 // The prompt goes by file: on Windows `claude` is a .cmd shim, spawned through
