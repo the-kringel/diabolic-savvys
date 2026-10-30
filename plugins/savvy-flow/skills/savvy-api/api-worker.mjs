@@ -72,10 +72,31 @@ const row = {
   stepNote: 'starting',
   pid: process.pid,
 }
+// On Windows the rename fails with EPERM / EBUSY while a reader (the agents panel,
+// an antivirus scan) holds the status file open. Retry briefly, then write in place;
+// a status row is never worth crashing the runner and losing the worker's report.
+const sleepSync = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms)
 const save = () => {
   row.updatedAt = Date.now()
-  writeFileSync(`${file}.tmp`, JSON.stringify(row))
-  renameSync(`${file}.tmp`, file)
+  const json = JSON.stringify(row)
+  try {
+    writeFileSync(`${file}.tmp`, json)
+    for (let i = 0; ; i++) {
+      try {
+        renameSync(`${file}.tmp`, file)
+        return
+      } catch (e) {
+        if (i >= 4 || !['EPERM', 'EBUSY', 'EACCES'].includes(e.code)) throw e
+        sleepSync(25 * (i + 1))
+      }
+    }
+  } catch {
+    try {
+      writeFileSync(file, json)
+    } catch {
+      // skip this update; the next one will try again
+    }
+  }
 }
 save()
 
