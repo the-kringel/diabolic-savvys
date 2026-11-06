@@ -1,5 +1,10 @@
 # Changelog
 
+## savvy-flow 1.4.1 — 2026-11-06
+
+- `savvy-api`: a locked status file (Windows `EPERM` on rename) no longer crashes the worker: it retries the rename briefly, then writes in place, then skips that update.
+- `savvy-api`: when `SAVVY_API_KEY` is missing, the skill now tells you to set it as an environment variable for your user account instead of in `~/.claude/settings.json`.
+
 ## 1.3.0 — 2026-10-27
 
 First release of diabolic-savvys, forked from [johnnyvizz/claude-kit](https://github.com/johnnyvizz/claude-kit) (`savvy-flow` 1.2.0, `savvy-progress` 1.2.1).
