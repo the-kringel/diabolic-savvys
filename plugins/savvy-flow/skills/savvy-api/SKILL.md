@@ -13,7 +13,7 @@ The runner is `api-worker.mjs` in this skill's base directory (shown above as "B
 
 Run `node "<base>/api-worker.mjs" --check` once:
 - exit 0: API mode is on.
-- exit 2: `SAVVY_API_KEY` is not set. Tell the user in one line (they set it in `env` of `~/.claude/settings.json`; never ask them to paste the key in chat) and use normal subagents.
+- exit 2: `SAVVY_API_KEY` is not set. Tell the user in one line (they set it as an environment variable for their user account, e.g. Windows "Edit environment variables for your account" or an `export` in their shell profile, then restart Claude; keep it out of `~/.claude/settings.json`, which is plain text and often synced; never ask them to paste the key in chat) and use normal subagents.
 - exit 3: credit ran out within the last 6 hours. Use normal subagents, say so in one line.
 
 ## Delegating one task
