@@ -7,7 +7,7 @@
       "name": "savvy-flow",
       "source": "./plugins/savvy-flow",
       "description": "Skill: plan, delegate to tiered worker subagents (Opus medium by default, Sonnet swarm and tester), review.",
-      "version": "1.4.0",
+      "version": "1.4.1",
       "category": "skill"
     },
     {
