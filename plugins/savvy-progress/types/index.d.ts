@@ -40,6 +40,13 @@ export type AgentRun = {
   stepNote?: string
   /** A headless worker on API credit, read from .claude/api-workers by the savvy-api skill. */
   isApi?: boolean
+  /** A side session this session started with start_session; `id` is its app id (`local_…`). */
+  kind?: 'session'
+  /** The session waits for the person: a permission dialog or a question. */
+  isWaiting?: boolean
+  waitReason?: string
+  /** Opens the session in the app. */
+  link?: string
 }
 
 export type Panel = {
