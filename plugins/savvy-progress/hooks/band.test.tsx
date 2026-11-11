@@ -31,3 +31,21 @@ test('desktop: the row is still one Svg', async ($, on) => {
   await session($, on)
   expect(await band($, 'desktop')).toEqual({ svg: 1, title: 0, label: 0 })
 })
+
+// A background worker's Agent call returns at once; the bar must still count it,
+// and with no plan reported the total is the workers it can see.
+test('terminal: with no plan reported, a running worker still fills the count', async ($, on) => {
+  mock.clock(on, { now: Date.parse('2026-10-10T02:00:00Z') })
+  mock.env(on, { LANG: 'en_US.UTF-8' })
+  on('settings.read', async () => ({ value: {} }) as never)
+  on('ui.open', () => ({ value: { isPlaced: true } }) as never)
+  on('agent.spawn', () => ({ model: 'claude-opus-5-5', agentId: 'a1' }) as never)
+  on('session.start', async () => ({ cwd: '/repo' }) as never)
+  await $.session.start({ source: 'startup', cwd: '/repo', surface: 'terminal', isInteractive: true } as never)
+  await $.tool.call({ tool: 'mcp__savvy-progress__progress', title: 'Ship it' } as never)
+  await $.agent.spawn({ tool_use_id: 't1', prompt: 'p', description: 'Build it', subagentType: 'savvy-medium', provider: 'engine', parentModel: 'claude-opus-5-5', background: true, fork: false } as never)
+
+  const ui = await $.ui.mount({ plugin: 'savvy-progress', surface: 'terminal', ...BAND })
+  expect((await ui.findAll({ type: 'Text', text: /^Tasks 0\/1$/ })).length).toBe(1)
+  await ui.unmount()
+})
