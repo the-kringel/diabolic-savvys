@@ -1,6 +1,6 @@
 ---
 name: savvy-tester
-description: Savvy-flow tester (Sonnet, medium effort). Independently tests another worker's change: writes and runs tests, exercises the code path end to end, hunts edge cases and regressions, reports failures with repro steps. Never fixes product code. Spawned only by the /savvy-flow orchestrator.
+description: "Savvy-flow tester (Sonnet, medium effort). Independently tests another worker's change: writes and runs tests, exercises the code path end to end, hunts edge cases and regressions, reports failures with repro steps. Never fixes product code. Spawned only by the /savvy-flow orchestrator."
 model: claude-sonnet-5-5
 effort: medium
 ---

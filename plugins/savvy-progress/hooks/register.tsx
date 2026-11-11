@@ -22,7 +22,7 @@ const STEP_BRIEF = `
 Progress reporting: before any other work, call \`${STEP_TOOL}\` with \`total\` (your plan in 3-8 steps) and \`done: 0\`; call it again with \`done\` and a few-word \`note\` as each step finishes. It only draws a progress bar.`
 const PANE = 'savvy-agents'
 const PHASES: readonly Phase[] = ['plan', 'design', 'delegate', 'review', 'close']
-const TIERS: readonly string[] = ['fable', 'heavy', 'careful', 'medium', 'light']
+const TIERS: readonly string[] = ['fable', 'heavy', 'careful', 'medium', 'light', 'swarm', 'tester']
 // The tools' schemas are advice to the model, not a check: what a call may ask
 // the band and the panel to draw is bounded here.
 const MAX_TASKS = 200
@@ -75,11 +75,14 @@ const STRINGS = {
     review: 'Review',
     busy: 'running',
     ctx: 'ctx',
+    left: 'left',
+    stalled: 'no progress for',
+    min: 'min',
     session: 'session',
     cantOpen: 'Open it from the sidebar: the app would not switch to it from here.',
     subagent: 'subagent',
     needsYou: 'needs you',
-    tier: { light: 'light', medium: 'medium', careful: 'careful', heavy: 'heavy', fable: 'fable', other: 'other' },
+    tier: { light: 'light', medium: 'medium', careful: 'careful', heavy: 'heavy', fable: 'fable', swarm: 'swarm', tester: 'tester', other: 'other' },
     effort: { low: 'low', medium: 'medium', high: 'high', xhigh: 'xhigh', max: 'max' },
   },
   ru: {
@@ -110,11 +113,14 @@ const STRINGS = {
     review: 'Ревью',
     busy: 'в работе',
     ctx: 'ctx',
+    left: 'осталось',
+    stalled: 'нет прогресса',
+    min: 'мин',
     session: 'сессия',
     cantOpen: 'Откройте её в боковой панели: приложение не переключилось на неё отсюда.',
     subagent: 'субагент',
     needsYou: 'ждёт вас',
-    tier: { light: 'light', medium: 'medium', careful: 'careful', heavy: 'heavy', fable: 'fable', other: 'other' },
+    tier: { light: 'light', medium: 'medium', careful: 'careful', heavy: 'heavy', fable: 'fable', swarm: 'swarm', tester: 'tester', other: 'other' },
     effort: { low: 'low', medium: 'medium', high: 'high', xhigh: 'xhigh', max: 'max' },
   },
   he: {
@@ -145,11 +151,14 @@ const STRINGS = {
     review: 'בדיקה',
     busy: 'בעבודה',
     ctx: 'הקשר',
+    left: 'נותרו',
+    stalled: 'אין התקדמות',
+    min: "דק'",
     session: 'סשן',
     cantOpen: 'פתחו אותו מהסרגל הצדדי: האפליקציה לא עברה אליו מכאן.',
     subagent: 'תת־סוכן',
     needsYou: 'ממתין לך',
-    tier: { light: 'קל', medium: 'בינוני', careful: 'זהיר', heavy: 'כבד', fable: 'פייבל', other: 'אחר' },
+    tier: { light: 'קל', medium: 'בינוני', careful: 'זהיר', heavy: 'כבד', fable: 'פייבל', swarm: 'נחיל', tester: 'בודק', other: 'אחר' },
     effort: { low: 'נמוך', medium: 'בינוני', high: 'גבוה', xhigh: 'גבוה מאוד', max: 'מקסימלי' },
   },
 } as const
@@ -964,6 +973,57 @@ ${tile(0, s.cost, '≈' + fmtCost(t.cost))}${tile(1, s.tokens, fmtTokens(t.token
 const headerHeight = (title: string): number => (title ? 72 : 44)
 
 // The task's own progress when the worker reports steps; a finished run is full.
+// How long a tier's finished runs took, kept across sessions (`$.store`), so a worker
+// that reports no steps still gets an estimate once its tier has a few runs behind it.
+type Durations = Record<string, { n: number; avgMs: number }>
+let durations: Durations = {}
+const HISTORY_MIN = 3
+// A running worker with no sign of progress for this long gets a warning.
+const STALL_MS = 10 * 60 * 1000
+const STALL = '#E07B30'
+
+async function recordDuration($: EngineInterface, a: AgentRun, endedAt: number): Promise<void> {
+  const tier = tierOf(a.type)
+  const ms = endedAt - a.startedAt
+  if (ms <= 0) return
+  const prev = durations[tier] ?? { n: 0, avgMs: 0 }
+  const n = prev.n + 1
+  // A running mean over the last ~20 runs: recent runs count most.
+  durations = { ...durations, [tier]: { n, avgMs: prev.avgMs + (ms - prev.avgMs) / Math.min(n, 20) } }
+  await $.store.set('durations', durations).catch(() => undefined)
+}
+
+// Time left: the worker's own pace over its reported steps, blended with how long its
+// tier usually takes; with no steps, the tier's history alone. null when unknown.
+const etaOf = (a: AgentRun, at: number): number | null => {
+  if (a.status !== 'running' || a.isWaiting) return null
+  const spent = Math.max(0, at - a.startedAt)
+  const hist = durations[tierOf(a.type)]
+  const fromHistory = hist && hist.n >= HISTORY_MIN ? Math.max(0, hist.avgMs - spent) : null
+  const total = a.stepTotal ?? 0
+  const done = a.stepDone ?? 0
+  if (total && done > 0 && done < total) {
+    const pace = (spent / done) * (total - done)
+    return fromHistory === null ? pace : 0.7 * pace + 0.3 * fromHistory
+  }
+  return fromHistory && fromHistory > 0 ? fromHistory : null
+}
+
+const fmtEta = (ms: number): string => {
+  const s = tr()
+  const m = Math.round(ms / 60_000)
+  if (m < 1) return `<1 ${s.min} ${s.left}`
+  if (m < 60) return `~${m} ${s.min} ${s.left}`
+  return `~${Math.floor(m / 60)}h ${String(m % 60).padStart(2, '0')}m ${s.left}`
+}
+
+// Minutes since the worker last showed progress, when that is past the stall limit.
+const stalledFor = (a: AgentRun, at: number): number | null => {
+  if (a.status !== 'running' || a.isWaiting) return null
+  const quiet = at - (a.activeAt ?? a.startedAt)
+  return quiet > STALL_MS ? Math.round(quiet / 60_000) : null
+}
+
 const progressOf = (a: AgentRun): number | null => {
   if (a.status === 'done') return 1
   if (a.stepTotal) return Math.min(1, (a.stepDone ?? 0) / a.stepTotal)
@@ -982,15 +1042,19 @@ const agentSvg = (W: number, a: AgentRun, at: number): string => {
   const color = colorOf(tier)
   const ctx = ctxOf(a)
   const textW = W - 42 - 22
-  const meta = [a.kind === 'session' ? s.session : s.subagent, runModel(a)]
+  const meta = [runModel(a), a.kind === 'session' ? s.session : s.subagent]
   if (a.round > 1) meta.push(`${s.round} ${a.round}`)
   if (a.status === 'failed') meta.push(s.failed)
   const barW = textW
   const progress = progressOf(a)
-  const stats = `${s.ctx} ${ctx}% · ${fmtTokens(a.contextTokens)}  ≈${fmtCost(a.costUsd)}  ${fmtTime(elapsed(a, at))}`
+  const eta = etaOf(a, at)
+  const stalled = stalledFor(a, at)
+  const stats = `${s.ctx} ${ctx}% · ${fmtTokens(a.contextTokens)}  ≈${fmtCost(a.costUsd)}  ${fmtTime(elapsed(a, at))}${eta === null ? '' : '  ' + fmtEta(eta)}`
   const steps = a.isWaiting
     ? `✋ ${s.needsYou}${a.waitReason ? ': ' + a.waitReason : ''}`
-    : a.stepTotal
+    : stalled !== null
+      ? `⚠ ${s.stalled} ${stalled} ${s.min}`
+      : a.stepTotal
       ? `${a.stepDone ?? 0}/${a.stepTotal}${a.stepNote ? ' · ' + a.stepNote : ''}`
       : a.stepNote ?? ''
   const stepsW = Math.max(0, barW - textWidth(stats, 11) - 12)
@@ -1001,7 +1065,7 @@ const agentSvg = (W: number, a: AgentRun, at: number): string => {
     ROW_H,
     `${rowCrab(W, 0, 10, costumeOf(a.type), false, a.status === 'running' && !a.isWaiting)}${a.isWaiting ? raisedHand(W) : ''}
 <text ${startText(W, 42, 18)} font-family="${FONT}" font-size="11"><tspan fill="${color}">${xml(tier === 'other' ? a.type : tierWord(tier))}</tspan><tspan class="s">  ${xml(meta.join('  ·  '))}</tspan></text>
-${steps && stepsW > 30 ? `<text class="t" ${startText(W, 42, 33)}${a.isWaiting ? ` fill="${HAND}" font-weight="600"` : ''} font-family="${FONT}" font-size="11" font-variant-numeric="tabular-nums">${xml(fitText(steps, 11, stepsW))}</text>` : ''}
+${steps && stepsW > 30 ? `<text class="t" ${startText(W, 42, 33)}${a.isWaiting ? ` fill="${HAND}" font-weight="600"` : stalled !== null ? ` fill="${STALL}" font-weight="600"` : ''} font-family="${FONT}" font-size="11" font-variant-numeric="tabular-nums">${xml(fitText(steps, 11, stepsW))}</text>` : ''}
 <text class="s" ${endText(W, 42 + barW, 33, true)} font-family="${FONT}" font-size="11" font-variant-numeric="tabular-nums">${stats}</text>
 <rect class="k" x="${mx(W, 42, barW)}" y="40" width="${barW}" height="4" rx="2"/><rect${progress === null ? ' class="m"' : ''} x="${mx(W, 42, fillW)}" y="40" width="${fillW}" height="4" rx="2"${progress === null ? '' : ` fill="${color}"`}/>
 ${statusMark(mx(W, W - 8), 14, a.isWaiting ? 'waiting' : a.status, color)}
@@ -1151,6 +1215,10 @@ type SessionStatus = {
   stepDone?: number
   stepTotal?: number
   stepNote?: string
+  /** What the session (its subagents included) has used so far, and its own context fill. */
+  costUsd?: number
+  tokens?: number
+  contextTokens?: number
   /** The session that started this one, and the key its brief carried. */
   parentId?: string
   parentKey?: string
@@ -1164,20 +1232,27 @@ const START_TOOL = 'mcp__ccd_session__start_session'
 // Added to every brief this session sends: the side session reads its parent from it,
 // whether it starts now, from a card the person clicks, or from "start it".
 const PARENT_LINE = /\(savvy-progress: parent (local_[0-9a-f-]{36}) key ([a-z0-9]{4,16})\)/
-const parentLine = (key: string): string => `\n\n(savvy-progress: parent ${hostId} key ${key})`
+// The system prompt's instruction for briefs: written by the model, so the call that
+// auto mode reviews already holds the line.
+const sessionsSection = (): string =>
+  `# Side session briefs (savvy-progress)\n\nWhen you call \`${START_TOOL}\` with a \`prompt\`, end that prompt with these two parts, so the agents panel can track the session:\n` +
+  `1. This paragraph: "Progress reporting: before any other work, call \`${STEP_TOOL}\` with \`total\` (your plan in 3-8 steps) and \`done: 0\`; call it again with \`done\` and a few-word \`note\` as each step finishes."\n` +
+  `2. As the very last line, exactly: (savvy-progress: parent ${hostId} key <key>) — with <key> a new string of 4 to 16 lowercase letters and digits for each session (for example the task's title, shortened).`
 const HOST_ID = /local_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/
 // A running session rewrites its file at least this often, so a reader can tell it is alive.
 const HEARTBEAT_MS = 5 * 60 * 1000
+// Usage alone (cost, tokens) is written at most this often.
+const USAGE_MS = 15 * 1000
 
 let relayDir = ''
 let hostId = ''
 let mine: Omit<SessionStatus, 'hostId' | 'updatedAt'> = { state: 'idle' }
 let written = ''
+let writtenState = ''
 let writtenAt = 0
 const sessionSeen = new Map<string, number>()
 // Status files of other sessions already read for a parent, by their mtime.
 const seenFiles = new Map<string, number>()
-let briefCount = 0
 
 async function relayFolder($: EngineInterface): Promise<string> {
   if (relayDir) return relayDir
@@ -1193,12 +1268,19 @@ async function publish($: EngineInterface, state: SessionState, patch: Partial<t
   if (!hostId) return
   mine = { ...mine, ...patch, state, reason: state === 'waiting' ? patch.reason ?? mine.reason : undefined }
   const body = JSON.stringify(mine)
+  // The state without usage: a change there is written at once, usage alone every 15 s.
+  const stateBody = JSON.stringify({ ...mine, costUsd: undefined, tokens: undefined, contextTokens: undefined })
   const at = await $.clock.now()
-  if (body === written && (state !== 'running' || at - writtenAt < HEARTBEAT_MS)) return
+  const isDue =
+    stateBody !== writtenState ||
+    (body !== written && at - writtenAt >= USAGE_MS) ||
+    (state === 'running' && at - writtenAt >= HEARTBEAT_MS)
+  if (!isDue) return
   try {
     const status: SessionStatus = { hostId, ...mine, updatedAt: at }
     await $.fs.write(`${await relayFolder($)}/${hostId}.json`, JSON.stringify(status))
     written = body
+    writtenState = stateBody
     writtenAt = at
   } catch {
     // Retried with the next change.
@@ -1212,11 +1294,12 @@ const askedFor = (tool: string, input: unknown): string => {
   return clip(`${tool.replace(/^mcp__/, '')}${what ? ': ' + what.replace(/\s+/g, ' ') : ''}`, MAX_TITLE)
 }
 
-// The hero follows model and effort, for sessions as for subagents.
-const tierFor = (model: string, effort?: string): string => {
+// The hero follows model and effort, for sessions as for subagents. Swarm and Tester
+// both run on Sonnet at medium effort: the planned task's tier tells them apart.
+const tierFor = (model: string, effort?: string, planned?: string): string => {
   const m = model.toLowerCase()
   if (/fable|mythos/.test(m)) return 'fable'
-  if (/sonnet|haiku/.test(m)) return 'swarm'
+  if (/sonnet|haiku/.test(m)) return planned === 'tester' ? 'tester' : 'swarm'
   if (effort === 'low') return 'light'
   if (effort === 'high') return 'careful'
   if (effort === 'xhigh' || effort === 'max') return 'heavy'
@@ -1234,6 +1317,12 @@ async function trackStarted($: EngineInterface, input: Record<string, unknown>, 
   await addSession($, id, { ...brief, title: brief.title || named || String(input.name ?? '') })
 }
 
+// The tier the plan gave a task of this title, if the flow planned one.
+async function plannedTier($: EngineInterface, title: string): Promise<string | undefined> {
+  const f = await read($, flow)
+  return f?.tasks?.find(t => norm(t.title) === norm(title))?.tier || undefined
+}
+
 // A side session becomes a worker row, its hero set by model and effort.
 async function addSession($: EngineInterface, id: string, brief: Brief): Promise<void> {
   if ((await read($, agents)).some(a => a.id === id)) return
@@ -1243,7 +1332,7 @@ async function addSession($: EngineInterface, id: string, brief: Brief): Promise
   const run: AgentRun = {
     id,
     kind: 'session',
-    type: `savvy-${tierFor(model, effort)}`,
+    type: `savvy-${tierFor(model, effort, await plannedTier($, brief.title))}`,
     description: clip((brief.title || 'session').trim(), MAX_TITLE),
     model,
     effort,
@@ -1331,7 +1420,7 @@ async function syncSessions($: EngineInterface): Promise<void> {
     const run: AgentRun = {
       ...a,
       model,
-      type: `savvy-${tierFor(model, a.effort)}`,
+      type: `savvy-${tierFor(model, a.effort, tierOf(a.type))}`,
       contextMax: windowOf(model),
       status: w.state === 'idle' ? 'done' : 'running',
       endedAt: w.state === 'idle' ? Number(w.updatedAt) : undefined,
@@ -1340,8 +1429,13 @@ async function syncSessions($: EngineInterface): Promise<void> {
       stepDone: typeof w.stepDone === 'number' ? w.stepDone : a.stepDone,
       stepTotal: typeof w.stepTotal === 'number' ? w.stepTotal : a.stepTotal,
       stepNote: typeof w.stepNote === 'string' ? clip(w.stepNote, MAX_TITLE) : a.stepNote,
+      costUsd: typeof w.costUsd === 'number' ? w.costUsd : a.costUsd,
+      tokens: typeof w.tokens === 'number' ? w.tokens : a.tokens,
+      contextTokens: typeof w.contextTokens === 'number' ? w.contextTokens : a.contextTokens,
+      activeAt: Number(w.updatedAt) || a.activeAt,
     }
     if (isWaiting && !a.isWaiting) raised.push(run)
+    if (run.status === 'done' && a.status === 'running') await recordDuration($, a, Number(w.updatedAt))
     changed.set(a.id, run)
   }
   if (!changed.size) return
@@ -1358,6 +1452,8 @@ export const register: Register = (on, options) => {
     const started = await next(e)
     lang = await detectLang($, options.language)
     hostId = (await $.env.get('CLAUDE_CODE_HOST_SESSION_ID')) ?? ''
+    const kept = await $.store.get('durations').catch(() => undefined)
+    if (kept && typeof kept === 'object') durations = kept as Durations
     if (hostId) await publish($, 'idle', { model: await $.session.model().catch(() => undefined) })
     await $.tool.register({
       name: 'progress',
@@ -1472,13 +1568,14 @@ export const register: Register = (on, options) => {
       return { result: 'ok' }
     }
     let matched = false
+    const stepAt = await $.clock.now()
     await update($, agents, list =>
       list.map(a => {
         if (a.agentId !== agentId) return a
         matched = true
         const total = Math.max(0, Math.round(input.total ?? a.stepTotal ?? 0))
         const done = Math.max(0, Math.round(input.done ?? a.stepDone ?? 0))
-        return { ...a, stepTotal: total, stepDone: total ? Math.min(total, done) : done, stepNote: input.note?.trim() || undefined }
+        return { ...a, stepTotal: total, stepDone: total ? Math.min(total, done) : done, stepNote: input.note?.trim() || undefined, activeAt: stepAt }
       }),
     )
     return { result: matched ? 'ok' : `ignored: no panel row for agent ${agentId}` }
@@ -1527,17 +1624,22 @@ export const register: Register = (on, options) => {
     if (e.agentId || !hostId) return next(e)
     const str = (v: unknown): string | undefined => (typeof v === 'string' && v.trim() ? v.trim() : undefined)
     const brief: Brief = { title: str(input.title) ?? '', model: str(input.model), effort: str(input.effort) }
-    // A brief (not a start by proposal id, whose brief went out with the proposal)
-    // carries this session's id and a key to what it kept of the brief.
-    let call = e
-    if (str(input.prompt)) {
-      const key = `${(await $.clock.now()).toString(36)}${(briefCount++).toString(36)}`.slice(-12)
-      await $.store.set(`brief:${key}`, brief)
-      call = { ...e, prompt: `${String(input.prompt)}${parentLine(key)}` } as typeof e
-    }
-    const result = await next(call)
+    // The call is never rewritten: auto mode reviews it as the model wrote it, and a
+    // rewrite after that review is refused. The model ends the brief with the parent
+    // line (the system prompt asks it to, see prompt.compose); here its key is kept.
+    const line = PARENT_LINE.exec(str(input.prompt) ?? '')
+    if (line && line[1] === hostId) await $.store.set(`brief:${line[2]}`, brief)
+    const result = await next(e)
     await trackStarted($, input, result, brief)
     return result
+  })
+
+  // Asks the model to end every session brief with the parent line, so a side session
+  // can name this one as its parent however it starts (a card the person clicks too).
+  on('prompt.compose', async ($, e, next) => {
+    const composed = await next(e)
+    if (!hostId) return composed
+    return { sections: [...composed.sections, { id: 'savvy-progress:sessions', text: sessionsSection(), scope: 'session' as const }] }
   })
 
   // Safety net: worker launches move the faint layer even if the orchestrator forgets to report.
@@ -1596,9 +1698,22 @@ export const register: Register = (on, options) => {
     const result = yield* next(e)
     const agentId = e.agentId
     const usage = result.usage
-    if (!agentId || !usage) return result
+    if (!usage) return result
+    const stepModel = usage.model || e.model
+    if (hostId) {
+      // This session's own usage, its subagents' included, for an orchestrator's panel.
+      const used =
+        (usage.input_tokens || 0) + (usage.output_tokens || 0) + (usage.cache_read_input_tokens || 0) + (usage.cache_creation_input_tokens || 0)
+      await publish($, mine.state === 'idle' ? 'running' : mine.state, {
+        costUsd: (mine.costUsd ?? 0) + costOf(stepModel, usage, true),
+        tokens: (mine.tokens ?? 0) + used,
+        contextTokens: agentId ? mine.contextTokens : used,
+      })
+    }
+    if (!agentId) return result
 
-    const model = usage.model || e.model
+    const model = stepModel
+    const at = await $.clock.now()
     await update($, agents, list =>
       list.map((a): AgentRun =>
         a.agentId !== agentId
@@ -1623,6 +1738,7 @@ export const register: Register = (on, options) => {
                 (usage.cache_creation_input_tokens || 0),
               costUsd: a.costUsd + costOf(model, usage, true),
               steps: a.steps + 1,
+              activeAt: at,
             },
       ),
     )
@@ -1636,6 +1752,7 @@ export const register: Register = (on, options) => {
       await update($, agents, list =>
         list.map((a): AgentRun => {
           if (a.agentId !== agentId) return a
+          if (e.reason === 'answer') void recordDuration($, a, at)
           // A run whose steps went unseen still gets the turn's own sum.
           const fallback = a.steps === 0 && e.usage
           return {
@@ -1782,9 +1899,13 @@ export const register: Register = (on, options) => {
       const ctx = ctxOf(a)
       const progress = progressOf(a)
       const model = runModel(a)
+      const eta = etaOf(a, at)
+      const stalled = stalledFor(a, at)
       const steps = a.isWaiting
         ? ''
-        : a.stepTotal
+        : stalled !== null
+          ? `⚠ ${s.stalled} ${stalled} ${s.min} · `
+          : a.stepTotal
           ? `${a.stepDone ?? 0}/${a.stepTotal}${a.stepNote ? ' ' + a.stepNote : ''} · `
           : a.stepNote
             ? `${a.stepNote} · `
@@ -1800,7 +1921,7 @@ export const register: Register = (on, options) => {
           </Box>
           <Text dimColor wrap="truncate-end">
             {'  '}
-            {tier === 'other' ? a.type : tierWord(tier)} · {a.kind === 'session' ? s.session : s.subagent} · {model}
+            {tier === 'other' ? a.type : tierWord(tier)} · {model} · {a.kind === 'session' ? s.session : s.subagent}
             {a.round > 1 ? ` · ${s.round} ${a.round}` : ''}
           </Text>
           <Text wrap="truncate-end">
@@ -1809,6 +1930,7 @@ export const register: Register = (on, options) => {
             <Text dimColor>
               {' '}
               {steps}{s.ctx} {ctx}% · {fmtTokens(a.contextTokens)} ≈{fmtCost(a.costUsd)} {fmtTime(elapsed(a, at))}
+              {eta === null ? '' : ` · ${fmtEta(eta)}`}
             </Text>
           </Text>
           {a.isWaiting && (
@@ -1905,9 +2027,12 @@ export const register: Register = (on, options) => {
     // The terminal's element table is completed with an `Svg` that draws nothing: test the surface too.
     if (e.surface !== 'terminal' && 'Svg' in ui) {
       const { Svg } = ui
-      // About 8 CSS px per reported column; the rest is the count, the dismiss
-      // and their gaps. No floor above the slot: a row wider than it would wrap.
-      const width = Math.max(180, Math.min(1600, (e.props.bodyColumns || 100) * 8 - 96))
+      // About 8 CSS px per reported column; the rest is the `×N` button (wider with
+      // each digit), the dismiss, their gaps and the band's own padding. 96 px was too
+      // little: the dismiss was cut off at the right edge. No floor above the slot: a
+      // row wider than it would wrap.
+      const reserve = 136 + 8 * (String(crew).length - 1)
+      const width = Math.max(180, Math.min(1600, (e.props.bodyColumns || 100) * 8 - reserve))
       return (
         <Box flexDirection="column">
           <Box flexDirection={isRtl() ? 'row-reverse' : 'row'} alignItems="center" gap={1}>

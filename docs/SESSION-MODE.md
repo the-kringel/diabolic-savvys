@@ -1,6 +1,6 @@
 # Session mode: design spec
 
-Status: agreed 2026-11-11. Built and live-checked: the progress bar fix (§8), session workers in the panel and the raised hand (§3). Not built yet: ETA, stall detection, the savvy-flow session mode (§1, §2, §4–§7) and cost per session (§9).
+Status: agreed 2026-11-11. Built and live-checked: the progress bar fix (§8), session workers in the panel and the raised hand (§3). Built, not yet live-checked: the savvy-flow session mode (§1, §2, §4–§7, in `plugins/savvy-flow/skills/savvy-flow/SKILL.md` section 4a and the cleanup in section 6), time left and the stall warning (§3), cost per session (§9).
 
 The main session acts as an **orchestrator**. It plans the work and sends each piece either to a **side session** (started with `start_session`) or to a **subagent**. It keeps the main chat down to short status lines and decisions. savvy-progress shows both kinds of worker in one panel.
 
@@ -40,7 +40,7 @@ Every desktop session that runs savvy-progress writes its own state to `~/.claud
 - `waiting` is set when a **permission dialog actually opens** (`classic.PermissionRequest`) and while an `AskUserQuestion` is open. A `tool.check` of `ask` is not used: in auto mode that goes to the classifier, not to a person, and raised false alarms.
 - The orchestrator's panel draws that worker's hero **with a waving hand**, starts its title with ✋, and shows the reason in amber ("needs you: Bash: git push"). It sends one native notification per wait.
 
-**How the orchestrator finds its side sessions.** The app gives a side session no parent ID in its environment, and a card the person clicks starts a session without a `start_session` call the panel could see. So every brief the orchestrator sends gets one line, `(savvy-progress: parent local_… key …)`. On its first turn the side session copies parent and key into its status file. The orchestrator scans the folder for files that name it as parent and looks up title, model and effort it kept under the key. Starting directly, from "start it", or from a clicked card all work the same way.
+**How the orchestrator finds its side sessions.** The app gives a side session no parent ID in its environment, and a card the person clicks starts a session without a `start_session` call the panel could see. So every brief the orchestrator sends ends with one line, `(savvy-progress: parent local_… key …)`. The orchestrator writes it itself, asked by a section savvy-progress adds to its system prompt: an earlier version appended it to the call, and auto mode refused every rewritten call once (it had reviewed the call before the rewrite). On its first turn the side session copies parent and key into its status file. The orchestrator scans the folder for files that name it as parent and looks up title, model and effort it kept under the key. Starting directly, from "start it", or from a clicked card all work the same way.
 
 **Only the session the person talks to can start sessions.** A session asked to start one by another session's brief gets a card instead. So the orchestrator is always the session the person talks to, never a side session.
 
@@ -55,7 +55,7 @@ Every desktop session that runs savvy-progress writes its own state to `~/.claud
 The orchestrator writes one line per event and nothing more:
 
 ```
-▶ 18-R4-BAL Ring IV balance: session · Barbarian (Opus/medium)
+▶ 18-R4-BAL Ring IV balance: session · Medium · Opus/medium
 ✓ 17-GW-G the Gravewright's gates: done → PR #41
 ✋ 18-R4-MON build: needs you: "Keep the Rope-Drowned at 3 HP or 4?"
 ```

@@ -47,6 +47,8 @@ export type AgentRun = {
   waitReason?: string
   /** Opens the session in the app. */
   link?: string
+  /** The last sign of progress: a model request, a step report, a status file write. */
+  activeAt?: number
 }
 
 export type Panel = {
