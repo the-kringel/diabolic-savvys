@@ -6,15 +6,15 @@
     {
       "name": "savvy-flow",
       "source": "./plugins/savvy-flow",
-      "description": "Skill: plan, delegate to tiered worker subagents (Opus medium by default, Sonnet swarm and tester), review.",
-      "version": "1.4.1",
+      "description": "Skill: plan, delegate to tiered worker subagents (Opus medium by default, Sonnet swarm and tester) or, in the desktop app, to side sessions; review.",
+      "version": "1.5.0",
       "category": "skill"
     },
     {
       "name": "savvy-progress",
       "source": "./plugins/savvy-progress",
-      "description": "Mod: progress bar above the prompt and a live agents panel where every worker is a Diablo 2 hero crab.",
-      "version": "1.4.0",
+      "description": "Mod: progress bar above the prompt and a live agents panel where every worker, subagent or side session, is a Diablo 2 hero crab.",
+      "version": "1.5.0",
       "category": "mod"
     }
   ]

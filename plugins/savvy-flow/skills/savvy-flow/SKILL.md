@@ -1,6 +1,6 @@
 ---
 name: savvy-flow
-description: Orchestrated delivery flow. The session model plans, owns design, delegates implementation to tiered worker subagents (savvy-fable / savvy-heavy / savvy-careful / savvy-medium / savvy-light, plus the Sonnet savvy-swarm and savvy-tester) and adversarially reviews their output. Invoke with /savvy-flow <task>.
+description: Orchestrated delivery flow. The session model plans, owns design, delegates implementation to tiered worker subagents (savvy-fable / savvy-heavy / savvy-careful / savvy-medium / savvy-light, plus the Sonnet savvy-swarm and savvy-tester) or, in the desktop app, to side sessions for deliverables, and adversarially reviews their output. Invoke with /savvy-flow <task>.
 disable-model-invocation: true
 argument-hint: <task description>
 ---
@@ -24,7 +24,7 @@ If the tool `mcp__savvy-progress__progress` appears among your tools, including 
 - if re-planning changes the tasks: the new `tasks` and `total`;
 - once at close: `finished: true`.
 
-When delegating, pass the task's `title` verbatim as the Agent tool's `description` (a return round reuses it too): the agents panel matches runs to planned tasks by it.
+When delegating, pass the task's `title` verbatim as the Agent tool's `description`, or as the session's `title` for a session task (a return round reuses it too): the agents panel matches runs to planned tasks by it. savvy-progress shows side sessions in the same panel by itself, with a raised hand while one waits for the user; nothing extra to report for them.
 
 ## 1. Understand and plan (orchestrator only)
 
@@ -34,8 +34,9 @@ When delegating, pass the task's `title` verbatim as the Agent tool's `descripti
 3. Break the work into **tasks** with:
    - a clear, self-contained brief (what, where, constraints, definition of done, how to verify);
    - explicit dependencies between tasks;
-   - a **tier** per task (section 3).
-4. Present the plan to the user in a compact form: numbered tasks, tier, dependency order. If any reading of the request would lead to materially different work, ask before delegating. Otherwise proceed.
+   - a **tier** per task (section 3);
+   - a **kind** per task: `subagent` or `session` (section 4a). Only when session mode is available (section 4a); otherwise every task is a subagent.
+4. Present the plan to the user in a compact form: numbered tasks, tier, kind, dependency order. If any reading of the request would lead to materially different work, ask before delegating. Otherwise proceed. When the plan has session tasks, end it with one line saying so (`Tasks 2, 4 and 5 run as their own sessions.`): the user's go-ahead on that plan is their request to start them.
 
 ## 1a. New project (greenfield)
 
@@ -106,6 +107,62 @@ When a feature splits into many small pieces, fan out `savvy-swarm` (and `savvy-
 
 - Do not implement in parallel with workers. While they run, prepare the next briefs or the review checklist.
 
+## 4a. Sessions (session mode)
+
+In the Claude Code desktop app a task can run as its own **side session** instead of a subagent. Session mode is available when the `start_session` tool exists in this session (`mcp__ccd_session__start_session`, possibly deferred: load it with ToolSearch). Without it, skip this section: every task is a subagent.
+
+**A session for each deliverable, a subagent for each question.**
+
+| Run it as a **session** when | Run it as a **subagent** when |
+| --- | --- |
+| it ends in something of its own: a branch, a PR, an asset, a balance pass | you need its result in this turn: research, exploring code, review, tests |
+| it may need the user's approval or a decision partway through | it is short, fully specified, and will not need the user |
+| the user may want to watch it, steer it or take it over | it is a parallel fan-out (swarm waves, testers) |
+| it runs longer than a few minutes | nothing about it needs to outlive the turn |
+
+Both keep this conversation small: a subagent returns a summary, a session a short note. Choose by the kind of work, not by tokens. Investigation, review and testing stay subagents even in session mode.
+
+**Starting one.** Call `start_session` with:
+- `initiation: "user_asked"`, once the user approved a plan that names the session tasks (section 1). If the app turns the call into a card instead, say in one line that the card is waiting and go on.
+- `title`: the task's title, verbatim (the panel matches it to the plan). Titles name the task; never put a tier, model or hero in them.
+- `context: "fresh"` and a `background` of at least 80 characters: the goal, decisions so far, and how this task fits.
+- `use_worktree: true` for any session that writes code; two writers never share files. A new worktree is cut from the repository's default branch: when the task needs work that is only on your current branch, commit it first and pass `source_branch` (that branch's name).
+- model and effort from the task's tier, **never above this session's own** (the app refuses higher anyway):
+
+  | Tier | `model` | `effort` |
+  |------|---------|----------|
+  | Medium | omit (this session's) | `medium` |
+  | Careful | omit | `high` |
+  | Light | omit | `low` |
+  | Swarm, Tester | a Sonnet id (`claude-sonnet-5-5`) | `medium` |
+  | Heavy, Fable | only as section 3 allows, and only up to this session's own | |
+
+- `prompt`: the brief (section 4 rules) plus these lines for the session:
+  > You are a worker session started by an orchestrating session. Do this task yourself: do not start further sessions or delegate it. Report progress with `mcp__savvy-progress__step` if that tool exists. When done, end with a short report: what changed and where, the branch or PR, what you verified, what you left out. If you need a decision, end your turn with the question and the options; do not guess.
+
+With savvy-progress installed, your system prompt asks you to end each brief with a step-reporting paragraph and a parent line; write them as it says, so the panel can track the session.
+
+**Waves.** Keep at most **4 session tasks running** at once; start the next queued one when one finishes. Sessions and subagents can run side by side.
+
+**Notes from sessions.** Each time a session ends a turn, a note reaches you. A note is the session's claim, not a fact: review the result as section 5 says (its branch or PR diff, a `savvy-tester` subagent on that branch).
+
+**Decisions from a session.** When a session's note asks the user something:
+1. Put it to the user in your decision box: the session's title, one line of background, the question, the options as buttons.
+2. The user may answer here or directly in the session. Before forwarding an answer, check the session's latest state (`list_sessions` / its last note): if it already got its answer there, drop the question.
+3. Forward an answer given here with `SendMessage` to the session's `local_…` id, quoting the user's own words.
+
+**Permission prompts** (allow this command, this push …) are answered **in the session**, never from here: approving them for a worker would bypass the user's permission choice. The panel raises the worker's hand and sends a notification; you add at most one line (`✋ <title> needs your approval in its session.`).
+
+**A clean main chat.** While sessions run, write one line per event and nothing else:
+
+```
+▶ <title>: session · <tier> · <model>/<effort>
+✓ <title>: done → <PR link or branch>
+✋ <title>: needs you: "<question>"
+```
+
+Steps, time and cost live in the panel; decisions go to the decision box.
+
 ## 5. Adversarial review (orchestrator only)
 
 Treat every worker report as a claim to be checked, not a fact.
@@ -126,3 +183,13 @@ Cap at two return rounds per task; after that, re-plan or ask the user.
 ## 6. Close
 
 Report to the user in the session's usual style: what changed and where, what was verified, what was left out and why, follow-ups noticed but not touched. Mention which tiers ran, one line, no per-task narration.
+
+### Cleanup after merge (session mode)
+
+When a session task's PR has been **merged**, clean up without asking again (the user approved this standing rule):
+1. Archive the session (`archive_session`).
+2. Remove its worktree (`clean_up_worktrees`, or `git worktree remove <path>`).
+3. Delete its branch locally and on the remote (`git branch -d <branch>`, `git push origin --delete <branch>`), **only if** it is fully merged into the default branch (`git branch --merged <default>` lists it) and this flow created it.
+4. Run `git fetch --prune` and `git worktree prune`.
+
+Never delete an unmerged branch, a branch the flow did not create, or anything with uncommitted changes: list those in the close report instead. One line per cleaned task: `🧹 <title>: archived, worktree and branch removed`.

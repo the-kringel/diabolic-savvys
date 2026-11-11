@@ -1,6 +1,6 @@
 ---
 name: savvy-swarm
-description: Savvy-flow swarm worker (Sonnet, medium effort). One narrow, fully specified coding or testing task, run many at a time in parallel under close orchestrator review: a single function, component, endpoint, test file or migration with exact files and acceptance checks in the brief. Spawned only by the /savvy-flow orchestrator.
+description: "Savvy-flow swarm worker (Sonnet, medium effort). One narrow, fully specified coding or testing task, run many at a time in parallel under close orchestrator review: a single function, component, endpoint, test file or migration with exact files and acceptance checks in the brief. Spawned only by the /savvy-flow orchestrator."
 model: claude-sonnet-5-5
 effort: medium
 ---

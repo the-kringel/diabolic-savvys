@@ -32,6 +32,17 @@ When a feature splits into many small, independent pieces, the orchestrator sett
 
 For non-trivial changes, `savvy-tester` runs after the implementing worker returns. It never tests its own code (it writes none) and never fixes product code: its failures, with repro steps, go back as the defect list.
 
+## Session mode (desktop app)
+
+In the Claude Code desktop app the orchestrator can run a task as its own **side session** instead of a subagent: a session for each deliverable (a branch, a PR, an asset), a subagent for each question (research, review, tests). The plan says which tasks run as sessions; your go-ahead on the plan starts them.
+
+- Each session gets the model and effort of its tier, never above the orchestrator's own: Medium runs at medium effort, Careful at high, Light at low, Swarm and Tester on Sonnet.
+- At most 4 sessions run at once; the rest wait their turn.
+- While sessions run, the main chat gets one line per event (`▶` started, `✓` done, `✋` needs you). A question from a session comes to the orchestrator's decision box; answer it there or in the session itself. Permission prompts are answered in the session.
+- Once a session's PR is merged, the orchestrator archives the session, removes its worktree, and deletes its branch locally and on GitHub, only when the branch is fully merged and was created by the flow.
+
+With savvy-progress installed, side sessions show in the agents panel like subagents: same heroes, a raised hand while one waits for you, and a title you click to open the session. The design is in [docs/SESSION-MODE.md](../../docs/SESSION-MODE.md).
+
 ## With savvy-progress
 
 The skill and the agents run fine alone. With the [savvy-progress](../savvy-progress) mod installed, the orchestrator reports the plan and accepted tasks to a progress bar above the prompt, and each worker reports its own steps to the agents panel. Without the mod those calls are skipped.
