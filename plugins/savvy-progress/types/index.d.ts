@@ -55,6 +55,8 @@ export type Panel = {
   isCompact: boolean
   isDoneCollapsed: boolean
   autoOpenedFor: string
+  /** The pane is wanted: opened, and not closed by the person or the plugin since. Absent in state from before 1.5.1. */
+  isOpen?: boolean
 }
 
 declare module 'claude-code' {

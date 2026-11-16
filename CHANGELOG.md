@@ -1,5 +1,10 @@
 # Changelog
 
+## savvy-progress 1.5.1 — 2026-11-16
+
+- Fix: the agents panel no longer stays blank ("Nothing to show yet") while the progress bar still works. The panel was opened once per flow and never again, so when Claude Code dropped it (the session resumed in a new process, the plugins reloaded, the hooks worker restarted, or its drawing failed once) the app kept an empty tab until the flow was renamed. The panel is now opened and drawn again from the session's saved state when the session starts, when the app shows the session again, and by a 10-second check while it runs; no `progress` or `step` call is needed.
+- A panel you closed yourself (its close mark, `/agents-info`, the `×N` button) stays closed until you open it again.
+
 ## 1.5.0 — 2026-11-11
 
 Both plugins: session mode. See [docs/SESSION-MODE.md](docs/SESSION-MODE.md).
