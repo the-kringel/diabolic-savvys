@@ -14,7 +14,7 @@
       "name": "savvy-progress",
       "source": "./plugins/savvy-progress",
       "description": "Mod: progress bar above the prompt and a live agents panel where every worker, subagent or side session, is a Diablo 2 hero crab.",
-      "version": "1.5.1",
+      "version": "1.5.2",
       "category": "mod"
     }
   ]

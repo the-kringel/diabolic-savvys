@@ -89,13 +89,18 @@ function engine(on: On, seeded: { flow: Flow | null; agents: AgentRun[]; panel: 
   on('store.set', async () => ({ value: undefined }) as never)
   on('tool.register', async () => ({ value: undefined }) as never)
   on('command.register', async () => ({ value: undefined }) as never)
-  on('fs.write', async () => ({ value: undefined }) as never)
+  const written = new Map<string, string>()
+  on('fs.write', async (_$, e) => {
+    const { path, text } = e as unknown as { path: string; text: string }
+    written.set(path.split('\\').join('/'), text)
+    return { value: undefined } as never
+  })
   on('fs.exists', async () => ({ value: false }) as never)
   on('fs.list', async () => ({ value: [] }) as never)
   on('fs.stat', async () => {
     throw new Error('ENOENT')
   })
-  return { clock, opens, up, panel: () => state.get('panel')?.value as Panel, invalidated: () => invalidated }
+  return { clock, opens, up, written, panel: () => state.get('panel')?.value as Panel, invalidated: () => invalidated }
 }
 
 const start = ($: Engine) => $.session.start({ source: 'resume', cwd: '/repo', surface: 'desktop', isInteractive: true } as never)
@@ -157,4 +162,21 @@ test('a pane that was never opened is not opened', async ($, on) => {
   await start($)
   await clock.advance(30_000)
   expect(opens).toEqual([])
+})
+
+test('a long session draws eight heroes and the rest as text, and the pane log says what was drawn', async ($, on) => {
+  const { clock, written } = engine(on, { flow, agents, panel: openedBy150 })
+  await start($)
+  const ui = await $.ui.mount({ plugin: PLUGIN, surface: 'desktop', component: 'Pane', requestId: PANE, props: pane })
+  const sources = (await ui.findAll({ type: 'Svg' })).map(x => String((x.props as { source?: string }).source ?? ''))
+  // Twelve workers and seven planned tasks: every title is there, the drawing well under the 240 KB of a hero each.
+  expect(await ui.find({ key: 'title-a0' })).toBeTruthy()
+  expect(sources.reduce((sum, x) => sum + x.length, 0)).toBeLessThan(140_000)
+  await ui.unmount()
+
+  await clock.advance(1100)
+  const log = [...written].find(([path]) => path.endsWith(`/savvy-progress/pane-log/${HOST}.jsonl`))?.[1] ?? ''
+  const lines = log.trim().split('\n').map(line => JSON.parse(line) as { what: string; why?: string; isPlaced?: boolean; heroes?: number })
+  expect(lines.find(x => x.what === 'open')).toMatchObject({ why: 'start', isPlaced: true })
+  expect(lines.find(x => x.what === 'draw')).toMatchObject({ heroes: 8 })
 })
