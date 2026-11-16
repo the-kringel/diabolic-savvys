@@ -1129,20 +1129,62 @@ const STATUS_GLYPH: Record<string, string> = { running: '●', done: '✓', fail
 async function togglePane($: EngineInterface): Promise<boolean> {
   const isOpen = (await $.ui.panes()).some(p => p.id === PANE)
   if (isOpen) {
+    await update($, panel, prev => ({ ...prev, isOpen: false }))
     await $.ui.close({ id: PANE })
     return false
   }
+  await openPane($)
+  return true
+}
+
+// Every open goes through here: the session's state remembers that the pane is
+// wanted, so it can be opened again when the engine no longer holds it.
+async function openPane($: EngineInterface): Promise<void> {
   const at = await $.clock.now()
   await update($, now, () => at)
+  await update($, panel, prev => ({ ...prev, isOpen: true }))
   await $.ui.open({ id: PANE, title: tr().pane })
-  return true
 }
 
 async function autoOpen($: EngineInterface, key: string): Promise<void> {
   const p = await read($, panel)
   if (p.autoOpenedFor === key) return
-  await update($, panel, prev => ({ ...prev, autoOpenedFor: key }))
+  await update($, panel, prev => ({ ...prev, autoOpenedFor: key, isOpen: true }))
   void $.ui.open({ id: PANE, title: tr().pane })
+}
+
+// The pane is wanted: it was opened and neither the person nor the plugin closed
+// it. State written before 1.5.1 has no `isOpen`: there an automatic open counts.
+const wantsPane = (p: Panel): boolean => p.isOpen ?? p.autoOpenedFor !== ''
+
+// Opens the pane again from the session's state and asks for a redraw. The engine
+// keeps no pane across a new process, a hooks worker respawn or a drawing that
+// threw, while the app may still show its tab, blank; `autoOpen` alone never opened
+// it twice for one flow. An open id is only retitled, so this is safe to repeat.
+async function restorePane($: EngineInterface): Promise<void> {
+  try {
+    if (!wantsPane(await read($, panel))) return
+    if ((await read($, flow)) === null && (await read($, agents)).length === 0) return
+    const at = await $.clock.now()
+    await update($, now, () => at)
+    await $.ui.open({ id: PANE, title: tr().pane })
+    $.ui.invalidate('ui.render')
+  } catch {
+    // No surface to draw on, or the open was refused: the next attach or tick tries again.
+  }
+}
+
+// The timer's net under the two events: a wanted pane the engine no longer lists is
+// opened again, a few times per load at most so a drawing that keeps failing rests.
+const REOPEN_MAX = 5
+let reopened = 0
+async function reopenLostPane($: EngineInterface): Promise<void> {
+  if (reopened >= REOPEN_MAX) return
+  if (!wantsPane(await read($, panel))) return
+  if ((await $.ui.panes()).some(p => p.id === PANE)) return
+  if ((await $.session.surfaces().catch(() => [])).length === 0) return
+  reopened++
+  await restorePane($)
 }
 
 // Headless `claude -p` workers run by the savvy-api skill on API credit: they are
@@ -1519,21 +1561,38 @@ export const register: Register = (on, options) => {
           await syncApiWorkers($)
           await syncSessions($)
         }
+        if (tick % 10 === 0) await reopenLostPane($).catch(() => undefined)
         const list = await read($, agents)
         if (!list.some(a => a.status === 'running')) return
         const at = await $.clock.now()
         await update($, now, () => at)
       })()
     })
+    // A resumed session, a reload or a worker respawn: what the state holds is drawn
+    // at once, not at the next `progress` or `step` call.
+    reopened = 0
+    await restorePane($)
     return started
+  })
+
+  // The app shows this session again (switched back to it, reconnected): draw the pane.
+  on('session.attach', async ($, e, next) => {
+    const attached = await next(e)
+    await restorePane($)
+    return attached
+  })
+
+  // A pane the person closed stays closed; the engine's own close (`unload`) does not count.
+  on('ui.close', { id: PANE }, async ($, e, next) => {
+    const closed = await next(e)
+    if (e.origin.kind !== 'unload') await update($, panel, prev => ({ ...prev, isOpen: false }))
+    return closed
   })
 
   on('command.run', { command: 'agents-info' }, async ($, e) => {
     // `/agents-info open` opens the panel, or brings it forward from behind another tab, without toggling it.
     if ((e.args ?? '').trim() === 'open') {
-      const at = await $.clock.now()
-      await update($, now, () => at)
-      await $.ui.open({ id: PANE, title: tr().pane })
+      await openPane($)
       return { text: tr().opened }
     }
     const isOpen = await togglePane($)
