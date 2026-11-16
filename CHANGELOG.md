@@ -1,5 +1,10 @@
 # Changelog
 
+## savvy-progress 1.5.2 — 2026-11-16
+
+- The agents panel stayed blank in a long session even with 1.5.1 loaded. Every worker and planned task was its own hero drawing of 12 to 19 KB, so a panel with a dozen workers was a drawing of about 280 KB. Only the first 8 rows (running workers first, then the newest finished, then the next planned tasks) get a hero now; the rest are one line of text. Whether the size was what the desktop app refused is not confirmed.
+- New pane log: each desktop session writes what it asked for and got (panel opens and their answers, the app attaching and detaching, closes, and each new shape of the drawing with its size) to `~/.claude/savvy-progress/pane-log/<session id>.jsonl`, the last 300 entries. A blank panel can now be diagnosed from that file.
+
 ## savvy-progress 1.5.1 — 2026-11-16
 
 - Fix: the agents panel no longer stays blank ("Nothing to show yet") while the progress bar still works. The panel was opened once per flow and never again, so when Claude Code dropped it (the session resumed in a new process, the plugins reloaded, the hooks worker restarted, or its drawing failed once) the app kept an empty tab until the flow was renamed. The panel is now opened and drawn again from the session's saved state when the session starts, when the app shows the session again, and by a 10-second check while it runs; no `progress` or `step` call is needed.

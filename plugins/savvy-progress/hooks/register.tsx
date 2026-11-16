@@ -1125,6 +1125,39 @@ const ctxBar = (pct: number, width: number): string => {
 
 const STATUS_GLYPH: Record<string, string> = { running: '●', done: '✓', failed: '✗', planned: '◷' }
 
+// The pane's log: what the engine was asked and what it answered (opens, attaches,
+// closes, draws), kept per desktop session in ~/.claude/savvy-progress/pane-log/. A
+// blank pane leaves nothing else to read; this says whether it was opened, placed
+// and drawn, and how large the drawing was.
+const LOG_MAX = 300
+const paneLog: string[] = []
+let isLogDirty = false
+function logPane(what: string, data: Record<string, unknown> = {}): void {
+  paneLog.push(JSON.stringify({ at: new Date().toISOString(), what, ...data }))
+  if (paneLog.length > LOG_MAX) paneLog.splice(0, paneLog.length - LOG_MAX)
+  isLogDirty = true
+}
+async function flushPaneLog($: EngineInterface): Promise<void> {
+  if (!isLogDirty || !hostId) return
+  isLogDirty = false
+  try {
+    const dir = (await relayFolder($)).replace(/sessions$/, 'pane-log')
+    await $.fs.write(`${dir}/${hostId}.jsonl`, paneLog.join('\n') + '\n')
+  } catch {
+    // The log is a convenience: a folder that cannot be written costs nothing else.
+  }
+}
+// One open, with its answer in the log.
+async function openLogged($: EngineInterface, why: string): Promise<void> {
+  try {
+    const opened = await $.ui.open({ id: PANE, title: tr().pane })
+    logPane('open', { why, ...opened })
+  } catch (err) {
+    logPane('open-failed', { why, error: String(err) })
+    throw err
+  }
+}
+
 // Opens the agents pane, or closes it when it is up; true when it ends up open.
 async function togglePane($: EngineInterface): Promise<boolean> {
   const isOpen = (await $.ui.panes()).some(p => p.id === PANE)
@@ -1143,14 +1176,14 @@ async function openPane($: EngineInterface): Promise<void> {
   const at = await $.clock.now()
   await update($, now, () => at)
   await update($, panel, prev => ({ ...prev, isOpen: true }))
-  await $.ui.open({ id: PANE, title: tr().pane })
+  await openLogged($, 'asked')
 }
 
 async function autoOpen($: EngineInterface, key: string): Promise<void> {
   const p = await read($, panel)
   if (p.autoOpenedFor === key) return
   await update($, panel, prev => ({ ...prev, autoOpenedFor: key, isOpen: true }))
-  void $.ui.open({ id: PANE, title: tr().pane })
+  void openLogged($, 'auto').catch(() => undefined)
 }
 
 // The pane is wanted: it was opened and neither the person nor the plugin closed
@@ -1161,30 +1194,57 @@ const wantsPane = (p: Panel): boolean => p.isOpen ?? p.autoOpenedFor !== ''
 // keeps no pane across a new process, a hooks worker respawn or a drawing that
 // threw, while the app may still show its tab, blank; `autoOpen` alone never opened
 // it twice for one flow. An open id is only retitled, so this is safe to repeat.
-async function restorePane($: EngineInterface): Promise<void> {
+async function restorePane($: EngineInterface, why: string): Promise<void> {
   try {
-    if (!wantsPane(await read($, panel))) return
-    if ((await read($, flow)) === null && (await read($, agents)).length === 0) return
     const at = await $.clock.now()
+    const p = await read($, panel)
+    const count = (await read($, agents)).length
+    const hasFlow = (await read($, flow)) !== null
+    if (!wantsPane(p) || (!hasFlow && count === 0)) {
+      logPane('restore-skipped', { why, isOpen: p.isOpen, autoOpenedFor: p.autoOpenedFor, hasFlow, agents: count })
+      return
+    }
     await update($, now, () => at)
-    await $.ui.open({ id: PANE, title: tr().pane })
+    await openLogged($, why)
     $.ui.invalidate('ui.render')
   } catch {
     // No surface to draw on, or the open was refused: the next attach or tick tries again.
   }
 }
 
+// A draw in the log: each new shape of the pane once, and a count every half minute.
+const HERO_ROWS = 8
+let draws = 0
+let lastDraw = ''
+let lastDrawAt = 0
+function noteDraw(shape: Record<string, unknown>): void {
+  const at = Date.now()
+  draws++
+  const key = JSON.stringify(shape)
+  if (key === lastDraw && at - lastDrawAt < 30_000) return
+  lastDraw = key
+  lastDrawAt = at
+  logPane('draw', { ...shape, draws })
+}
+
 // The timer's net under the two events: a wanted pane the engine no longer lists is
 // opened again, a few times per load at most so a drawing that keeps failing rests.
 const REOPEN_MAX = 5
 let reopened = 0
+let lastSeen = ''
 async function reopenLostPane($: EngineInterface): Promise<void> {
-  if (reopened >= REOPEN_MAX) return
   if (!wantsPane(await read($, panel))) return
-  if ((await $.ui.panes()).some(p => p.id === PANE)) return
-  if ((await $.session.surfaces().catch(() => [])).length === 0) return
+  const listed = await $.ui.panes()
+  const surfaces = await $.session.surfaces().catch(() => [])
+  const mineListed = listed.find(p => p.id === PANE)
+  const seen = JSON.stringify({ pane: mineListed ?? null, surfaces })
+  if (seen !== lastSeen) {
+    lastSeen = seen
+    logPane('panes', { pane: mineListed ?? null, surfaces })
+  }
+  if (mineListed || surfaces.length === 0 || reopened >= REOPEN_MAX) return
   reopened++
-  await restorePane($)
+  await restorePane($, 'lost')
 }
 
 // Headless `claude -p` workers run by the savvy-api skill on API credit: they are
@@ -1562,6 +1622,7 @@ export const register: Register = (on, options) => {
           await syncSessions($)
         }
         if (tick % 10 === 0) await reopenLostPane($).catch(() => undefined)
+        await flushPaneLog($)
         const list = await read($, agents)
         if (!list.some(a => a.status === 'running')) return
         const at = await $.clock.now()
@@ -1571,20 +1632,31 @@ export const register: Register = (on, options) => {
     // A resumed session, a reload or a worker respawn: what the state holds is drawn
     // at once, not at the next `progress` or `step` call.
     reopened = 0
-    await restorePane($)
+    logPane('session.start', { source: (e as { source?: string }).source, surfaces: await $.session.surfaces().catch(() => []) })
+    await restorePane($, 'start')
+    await flushPaneLog($)
     return started
   })
 
   // The app shows this session again (switched back to it, reconnected): draw the pane.
   on('session.attach', async ($, e, next) => {
     const attached = await next(e)
-    await restorePane($)
+    logPane('session.attach', { surface: e.surface, clientId: e.clientId, viewport: e.viewport })
+    await restorePane($, 'attach')
+    await flushPaneLog($)
     return attached
+  })
+
+  on('session.detach', async ($, e, next) => {
+    logPane('session.detach', { surface: e.surface, clientId: e.clientId, reason: e.reason })
+    await flushPaneLog($)
+    return next(e)
   })
 
   // A pane the person closed stays closed; the engine's own close (`unload`) does not count.
   on('ui.close', { id: PANE }, async ($, e, next) => {
     const closed = await next(e)
+    logPane('close', { origin: e.origin.kind })
     if (e.origin.kind !== 'unload') await update($, panel, prev => ({ ...prev, isOpen: false }))
     return closed
   })
@@ -1914,17 +1986,35 @@ export const register: Register = (on, options) => {
           </Box>
         )
       }
-      const shownDone = p.isDoneCollapsed ? 0 : finished.length
+      // A hero row is a drawing of its own, 12 to 19 KB: only the first HERO_ROWS
+      // rows get one (running workers first, then the newest finished, then the next
+      // planned tasks), the rest are one line of text, so a long session's pane
+      // stays a small drawing.
+      const shown = [...running, ...(p.isDoneCollapsed ? [] : finished)]
+      const heroes = new Set(shown.slice(0, HERO_ROWS).map(a => a.id))
+      const plain = shown.length - heroes.size
+      const plannedHeroes = Math.max(0, Math.min(planned.length, HERO_ROWS - heroes.size))
       const lines = 1 + (isEmpty ? 1 : 0) + (running.length > 0 ? 1 : 0) + (finished.length > 0 ? 1 : 0) + (planned.length > 0 ? 1 : 0)
-      const gridH = headerHeight(title) + lines * LINE_H + (running.length + shownDone) * (LINE_H + ROW_H) + planned.length * 46
+      const gridH = headerHeight(title) + lines * LINE_H + heroes.size * (LINE_H + ROW_H) + plain * 2 * LINE_H + plannedHeroes * 46 + (planned.length - plannedHeroes) * LINE_H
+      let svgChars = 0
+      const sized = (source: string): string => {
+        svgChars += source.length
+        return source
+      }
       // One worker: its title (the click target) over its drawing; the whole row lights on hover.
       const workerRow = (a: AgentRun, state: string) => (
         <Box key={`row-${a.id}`} flexDirection="column" hover={{ scope: `w-${a.id}`.slice(0, 64) }}>
           {titleOf(a)}
-          <Svg source={agentSvg(W, a, at)} alt={`${a.description}: ${modelName(a.model)}, ${state}`} width={W} height={ROW_H} />
+          {heroes.has(a.id) ? (
+            <Svg source={sized(agentSvg(W, a, at))} alt={`${a.description}: ${modelName(a.model)}, ${state}`} width={W} height={ROW_H} />
+          ) : (
+            <Text dimColor wrap="truncate-end">
+              {STATUS_GLYPH[a.status]} {runModel(a)} · ≈{fmtCost(a.costUsd)} · {fmtTime(elapsed(a, at))}
+            </Text>
+          )}
         </Box>
       )
-      return (
+      const tree = (
         <Box flexDirection="column">
           {/* The grid sizes the pane; the content is placed over it, as an
               absolute Box paints over the siblings before it. */}
@@ -1941,14 +2031,23 @@ export const register: Register = (on, options) => {
             {!p.isDoneCollapsed &&
               finished.map(a => workerRow(a, s.isFinished))}
             {planned.length > 0 && section('h-plan', `${s.planned} · ${planned.length}`)}
-            {planned.map(pl => (
-              <Svg key={`plan-${pl.n}`} source={plannedSvg(W, pl)} alt={`${pl.n}. ${pl.title}: ${s.isPlanned}`} width={W} height={46} />
-            ))}
+            {planned.map((pl, i) =>
+              i < plannedHeroes ? (
+                <Svg key={`plan-${pl.n}`} source={sized(plannedSvg(W, pl))} alt={`${pl.n}. ${pl.title}: ${s.isPlanned}`} width={W} height={46} />
+              ) : (
+                <Text key={`plan-${pl.n}`} dimColor wrap="truncate-end">
+                  ◷ {pl.n}. {pl.title} · {tierWord(pl.tier in TIER_COLOR ? pl.tier : 'other')}
+                </Text>
+              ),
+            )}
           </Box>
         </Box>
       )
+      noteDraw({ surface: e.surface, placement: e.props.placement, columns: e.props.bodyColumns, running: running.length, finished: finished.length, planned: planned.length, heroes: heroes.size + plannedHeroes, svgChars })
+      return tree
     }
 
+    noteDraw({ surface: e.surface, placement: e.props.placement, columns: e.props.bodyColumns, running: running.length, finished: finished.length, planned: planned.length })
     // Terminal: the same content in text rows.
     const cols = Math.max(24, e.props.bodyColumns || 40)
     const barW = Math.max(6, Math.min(20, cols - 34))
