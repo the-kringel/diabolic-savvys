@@ -23,7 +23,7 @@ export const LIMITS = {
 // quota costs, so the worker's ledger measures them over time. Argon is left out: it
 // trails Neon on Terminal-Bench 4.1, so it runs only when a task names it with --model.
 export const LADDERS = {
-  mechanical: ['gemini-3.8-flash-medium', 'gemini-4-hydrogen-low', 'gemini-4-hydrogen-medium', 'gemini-4-hydrogen-high'],
+  mechanical: ['gemini-4-hydrogen-low', 'gemini-4-hydrogen-low', 'gemini-4-hydrogen-medium', 'gemini-4-hydrogen-high'],
   code: ['gemini-4-hydrogen-medium', 'gemini-4-neon-low', 'gemini-4-neon-medium', 'gemini-4-neon-high', 'gemini-4-neon-xhigh'],
   design: ['gemini-4-neon-low', 'gemini-4-neon-medium', 'gemini-4-neon-high', 'gemini-4-neon-xhigh'],
   review: ['gemini-4-hydrogen-high', 'gemini-4-neon-medium', 'gemini-4-neon-high', 'gemini-4-neon-xhigh'],

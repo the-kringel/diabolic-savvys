@@ -102,11 +102,11 @@ test("expiring Claude quota never spends its five-hour reserve", () => {
   assert.equal(bothLow.mechanical.provider, 'gemini')
 })
 
-test('Argon runs only when a task names it', () => {
-  assert.equal(Object.values(LADDERS).flat().some(model => model.includes('argon')), false)
+test('routing never picks Flash, and Argon runs only when a task names it', () => {
+  assert.equal(Object.values(LADDERS).flat().some(model => /flash|argon/.test(model)), false)
   for (const kind of KINDS) {
     for (const size of ['s', 'm', 'l']) {
-      for (const mode of ['normal', 'surplus']) assert.doesNotMatch(routeGemini(kind, size, { mode }), /flash|argon/)
+      for (const mode of ['conserve', 'normal', 'surplus']) assert.doesNotMatch(routeGemini(kind, size, { mode }), /flash|argon/)
     }
   }
 })

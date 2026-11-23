@@ -46,11 +46,11 @@ for (const surface of ['terminal', 'desktop'] as const) {
     expect(await ui.find({ text: /Finished · 1/ })).toBeDefined()
   })
 
-  test(`${surface}: a Gemini worker's status file becomes a panel row`, async ($, on) => {
+  for (const [model, label, hero] of [['gemini-4-neon-xhigh', 'Gemini Neon XHigh', 'c-neon-xhigh'], ['gemini-4-hydrogen-high', 'Gemini Hydrogen High', 'c-hydrogen-high'], ['gemini-4-argon-medium', 'Gemini Argon Medium', 'c-argon-medium']] as const) test(`${surface}: a ${label} worker's status file becomes a panel row`, async ($, on) => {
     const clock = mock.clock(on, { now: Date.parse('2026-11-23T20:00:00Z') })
     const t0 = clock.now()
     const worker = {
-      id: 'gemini-1', type: 'savvy-gemini', provider: 'gemini', description: 'Redesign settings', model: 'gemini-4-neon-xhigh',
+      id: 'gemini-1', type: 'savvy-gemini', provider: 'gemini', description: 'Redesign settings', model,
       status: 'running', startedAt: t0, updatedAt: t0, tokens: 31000, contextTokens: 24000, costUsd: 0, steps: 2,
       stepNote: 'edit_file settings.tsx',
     }
@@ -71,9 +71,9 @@ for (const surface of ['terminal', 'desktop'] as const) {
       (await ui.find({ text: re })) !== undefined ||
       (await ui.findAll({ type: 'Svg' })).some(el => re.test(`${el.props.alt} ${el.props.source}`))
     expect(await shows(/Redesign settings/)).toBe(true)
-    expect(await shows(/Gemini Neon XHigh/)).toBe(true)
+    expect(await shows(new RegExp(label))).toBe(true)
     expect(await shows(/· API/)).toBe(false)
-    // The desktop dresses the row as the Laser Boss.
-    if (surface === 'desktop') expect(await shows(/c-neon-xhigh/)).toBe(true)
+    // The desktop dresses the row as that model's hero.
+    if (surface === 'desktop') expect(await shows(new RegExp(hero))).toBe(true)
   })
 }

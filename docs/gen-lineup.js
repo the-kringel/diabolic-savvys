@@ -60,13 +60,18 @@ let out=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W*cols} ${H}" wi
 L.forEach(([c,t,n,cls,m],i)=>{const cx=i*W+W/2;out+=crab(c,t,cx-60,20,4)+`<rect x="${cx-14}" y="134" width="28" height="3" fill="${t}"/><text class="n" x="${cx}" y="152">${n}</text><text x="${cx}" y="172">${cls}</text><text x="${cx}" y="190">${m}</text>`});
 out+='</svg>\n';
 fs.writeFileSync(path.join(__dirname,'lineup.svg'),out);
-// The Neon ravers come straight from the mod's neon.mjs: docs/neon-lineup.svg.
-import(require('url').pathToFileURL(path.join(root,'plugins/savvy-progress/hooks/neon.mjs')).href).then(({NEON,NEON_COLOR,NEON_CSS})=>{
+// The Gemini heroes come straight from the mod's gemini-heroes.mjs: docs/<family>-lineup.svg.
+import(require('url').pathToFileURL(path.join(root,'plugins/savvy-progress/hooks/gemini-heroes.mjs')).href).then(({GEMINI_HEROES,GEMINI_COLOR,NEON_CSS,ELEMENT_CSS})=>{
  const kit=(st,body)=>({stamp:(_f,...a)=>st(...a),crabBody:(_f,a=0)=>body(a)});
- for(const[k,draw]of Object.entries(NEON))C[k]=(f,t,st,body)=>draw(f,t,kit(st,body));
- const R=[['neon-low','Glowstick Kid','Gemini Neon · low'],['neon-medium','Acid Raver','Gemini Neon · medium'],['neon-high','Vinyl DJ','Gemini Neon · high'],['neon-xhigh','Laser Boss','Gemini Neon · xhigh']];
- const RW=190,RH=224,neon=/<style>([\s\S]*)<\/style>/.exec(NEON_CSS)[1];
- let o=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${RW*R.length} ${RH}" width="${RW*R.length}" height="${RH}" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif"><style>${css}${neon} text{fill:#B1B9C6;font-size:13px;text-anchor:middle} .n{font-weight:700;font-size:15px} rect{shape-rendering:crispEdges}</style><rect width="${RW*R.length}" height="${RH}" fill="#0D0F13"/>`;
- R.forEach(([c,name,m],i)=>{const cx=i*RW+RW/2;o+=crab(c,NEON_COLOR[c],cx-75,24,5)+`<text class="n" x="${cx}" y="186" style="fill:${NEON_COLOR[c]}">${name}</text><text x="${cx}" y="206">${m}</text>`});
- fs.writeFileSync(path.join(__dirname,'neon-lineup.svg'),o+'</svg>\n');
+ for(const[k,draw]of Object.entries(GEMINI_HEROES))C[k]=(f,t,st,body)=>draw(f,t,kit(st,body));
+ const inner=s=>/<style>([\s\S]*)<\/style>/.exec(s)[1];
+ const lineup=(file,family,R)=>{
+  const RW=190,RH=224;
+  let o=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${RW*R.length} ${RH}" width="${RW*R.length}" height="${RH}" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif"><style>${css}${inner(family)} text{fill:#B1B9C6;font-size:13px;text-anchor:middle} .n{font-weight:700;font-size:15px} rect{shape-rendering:crispEdges}</style><rect width="${RW*R.length}" height="${RH}" fill="#0D0F13"/>`;
+  R.forEach(([c,name,m],i)=>{const cx=i*RW+RW/2;o+=crab(c,GEMINI_COLOR[c],cx-75,24,5)+`<text class="n" x="${cx}" y="186" style="fill:${GEMINI_COLOR[c]}">${name}</text><text x="${cx}" y="206">${m}</text>`});
+  fs.writeFileSync(path.join(__dirname,file),o+'</svg>\n');
+ };
+ lineup('neon-lineup.svg',NEON_CSS,[['neon-low','Glowstick Kid','Gemini Neon · low'],['neon-medium','Acid Raver','Gemini Neon · medium'],['neon-high','Vinyl DJ','Gemini Neon · high'],['neon-xhigh','Laser Boss','Gemini Neon · xhigh']]);
+ lineup('hydrogen-lineup.svg',ELEMENT_CSS,[['hydrogen-low','Raindrop Scout','Gemini Hydrogen · low'],['hydrogen-medium','Wave Rider','Gemini Hydrogen · medium'],['hydrogen-high','Deep Diver','Gemini Hydrogen · high'],['hydrogen-xhigh','Tide King','Gemini Hydrogen · xhigh']]);
+ lineup('argon-lineup.svg',ELEMENT_CSS,[['argon-low','Lab Assistant','Gemini Argon · low'],['argon-medium','Chemist','Gemini Argon · medium'],['argon-high','Plasma Professor','Gemini Argon · high']]);
 });
