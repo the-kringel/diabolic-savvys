@@ -1,5 +1,26 @@
 # Changelog
 
+## 1.6.1 — 2026-11-23
+
+### savvy-limits 0.1.1
+
+- Routing puts task fit first. `code` now starts on Claude because Gemini workers cannot run it, and `hard` leaves Claude only when Claude is blocked.
+- Claude keeps 40% of its 5-hour quota for orchestration and review. Below that, routine work moves to Gemini, even when Claude's weekly quota is about to expire.
+- Gemini model choices: Hydrogen replaces Flash for most mechanical work, and Neon xhigh replaces Argon at the top of `review` and `hard`. Argon runs only when a task names it.
+- New `media` track for generating images and reading video or audio, always on Gemini. Generated images are copied from Antigravity's artifacts into the run's worktree, so they appear in its diff.
+
+### savvy-flow 1.6.1
+
+- Side sessions pin their tier's model instead of inheriting the orchestrator's, so a Medium task under Fable runs on Opus.
+- Workers can no longer start subagents or side sessions, including workers run through `savvy-api`.
+- Image generation and video or audio reading go to Gemini, and wait rather than fall back to Claude when Gemini is unavailable.
+- `savvy-tester` runs at high effort. Sonnet at medium scored about 7 points lower on Anthropic's SWE-bench Pro subset.
+
+### savvy-progress 1.6.1
+
+- Claude Fable 5.2 costs use its real prices ($8 input, $40 output, $0.20 cache read, $16 cache write). The panel was using Fable 5's.
+- Planned Tester tasks show high effort.
+
 ## 1.6.0 — 2026-11-23
 
 ### savvy-limits 0.1.0 (new)

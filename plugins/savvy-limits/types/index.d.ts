@@ -1,6 +1,6 @@
 export type Mode = 'normal' | 'conserve' | 'surplus' | 'blocked' | 'unknown'
 export type Provider = 'claude' | 'gemini'
-export type Kind = 'mechanical' | 'code' | 'design' | 'review' | 'hard'
+export type Kind = 'mechanical' | 'code' | 'design' | 'review' | 'hard' | 'media'
 
 export type QuotaWindow = { remaining: number; resetAt: string | null; disabled: boolean }
 export type Windows = { weekly: QuotaWindow | null; fiveHour: QuotaWindow | null }

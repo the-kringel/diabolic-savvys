@@ -54,6 +54,7 @@ const [, front = '', body = ''] = agentFile.match(/^---\r?\n([\s\S]*?)\r?\n---\r
 const field = name => front.match(new RegExp(`^${name}:\\s*(.+)$`, 'm'))?.[1].trim()
 const model = args.model ?? field('model') ?? 'opus'
 const effort = field('effort')
+const denied = field('disallowedTools')
 
 const id = args.id ?? `${tier}-${Date.now().toString(36)}`
 const file = join(dir, `${id}.json`)
@@ -127,6 +128,7 @@ const cli = [
   '--permission-mode', args['permission-mode'] ?? 'acceptEdits',
 ]
 if (effort) cli.push('--effort', effort)
+if (denied) cli.push('--disallowedTools', q(denied))
 if (args['max-budget-usd']) cli.push('--max-budget-usd', args['max-budget-usd'])
 
 const child = spawn(process.env.SAVVY_CLAUDE_BIN ?? 'claude', cli, { cwd, env, shell: process.platform === 'win32' })

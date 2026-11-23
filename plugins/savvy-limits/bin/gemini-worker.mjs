@@ -7,6 +7,7 @@
 //   node gemini-worker.mjs run --title "Add retry" --kind code --size m --access write \
 //        --brief-file brief.md [--cwd <repo>] [--model gemini-4-neon-high] [--timeout-min 20]
 //        [--continue-from <id>]    build on an earlier run's unapplied or applied changes
+//        [--media-dir <folder>]    where a --kind media run saves images (default generated-media)
 //   node gemini-worker.mjs diff <id>
 //   node gemini-worker.mjs apply <id>      apply the run, and any runs it continues, to the project
 //   node gemini-worker.mjs discard <id>
@@ -15,9 +16,9 @@
 // Exit codes: 0 done, 1 failed, 2 bad usage, 3 quota blocked, 4 all slots busy.
 import { execFileSync, spawn } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
-import { appendFileSync, existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
+import { appendFileSync, copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, statSync, unlinkSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { isAbsolute, join, resolve } from 'node:path'
 import { parseArgs } from 'node:util'
 import { assessPace, buildReport, parseGeminiUsage, routeGemini } from '../lib/capacity.mjs'
 
@@ -29,6 +30,9 @@ const WORKTREES = join(STATE, 'worktrees')
 const MAX_PARALLEL = Number(process.env.SAVVY_GEMINI_MAX_PARALLEL || 2)
 const MAX_PROMPT_CHARS = 24000
 const MIN_MEASURED_PCT = 5
+const MEDIA_FILE = /\.(png|jpe?g|webp|gif)$/i
+const MAX_MEDIA_FILES = 8
+const MAX_MEDIA_BYTES = 20 * 1024 * 1024
 
 // Headless agy ends the turn when a terminal command is denied, so workers use file
 // tools. The orchestrator runs builds and tests in the worktree afterward.
@@ -195,6 +199,26 @@ function worktreeChanges(path) {
   return { files, stat: git(path, 'diff', '--stat', 'HEAD') }
 }
 
+// agy saves generated images to the conversation's artifacts, outside the worktree. Copy
+// them in so they show in the run's diff and go through review like any other change.
+function collectMedia(conversationId, worktreePath, mediaDir) {
+  if (!/^[0-9a-f-]{36}$/i.test(conversationId ?? '')) return []
+  const source = join(homedir(), '.gemini', 'antigravity-cli', 'brain', conversationId)
+  if (!existsSync(source)) return []
+  const saved = []
+  for (const entry of readdirSync(source, { withFileTypes: true })) {
+    if (saved.length >= MAX_MEDIA_FILES) break
+    if (!entry.isFile() || !MEDIA_FILE.test(entry.name)) continue
+    const from = join(source, entry.name)
+    if (statSync(from).size > MAX_MEDIA_BYTES) continue
+    const name = entry.name.replace(/[^\w.-]/g, '_')
+    mkdirSync(resolve(worktreePath, mediaDir), { recursive: true })
+    copyFileSync(from, resolve(worktreePath, mediaDir, name))
+    saved.push(`${mediaDir.replace(/\\/g, '/').replace(/\/$/, '')}/${name}`)
+  }
+  return saved
+}
+
 async function cmdStatus() {
   const windows = await readQuota()
   const report = buildReport({ rateLimits: [], gemini: { windows, asOf: Date.now() } })
@@ -216,6 +240,8 @@ async function cmdRun(v) {
   }
   const kind = v.kind ?? 'code'
   const size = v.size ?? 'm'
+  const mediaDir = v['media-dir'] ?? 'generated-media'
+  if (isAbsolute(mediaDir) || mediaDir.split(/[\\/]/).includes('..')) return fail('--media-dir must be a folder inside the project.')
   const prompt = `${PREAMBLE[access]}\n\nTASK:\n${task}`
   if (prompt.length > MAX_PROMPT_CHARS) return fail(`Brief is too long (${prompt.length} chars). Reference files instead.`)
 
@@ -290,6 +316,7 @@ async function cmdRun(v) {
     const denied = envelope?.denied_actions ?? []
     const stoppedByDenial = envelope?.status === 'SUCCESS' && denied.length > 0 && !envelope.response?.trim()
     const status = res.timedOut ? 'TIMEOUT' : stoppedByDenial ? 'DENIED' : (envelope?.status ?? 'ERROR')
+    const media = kind === 'media' && worktree ? collectMedia(envelope?.conversation_id, worktree.path, mediaDir) : []
     const changes = worktree ? worktreeChanges(worktree.path) : null
     let after = null
     let quotaError = null
@@ -335,6 +362,7 @@ async function cmdRun(v) {
       ...record,
       worktree: worktree && { path: worktree.path, branch: worktree.branch },
       changes,
+      media,
       warnings,
       response: envelope?.response ?? null,
       error: ok ? undefined : envelope?.error ?? (res.stderr.trim().slice(0, 1000) || 'agy returned no result'),
@@ -430,6 +458,7 @@ const { values, positionals } = parseArgs({
     cwd: { type: 'string' },
     'timeout-min': { type: 'string' },
     'continue-from': { type: 'string' },
+    'media-dir': { type: 'string' },
   },
 })
 

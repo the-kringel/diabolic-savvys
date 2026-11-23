@@ -400,7 +400,7 @@ const TIER_MODEL: Record<string, [model: string, effort: string]> = {
   medium: ['Opus', 'medium'],
   light: ['Opus', 'low'],
   swarm: ['Sonnet', 'medium'],
-  tester: ['Sonnet', 'medium'],
+  tester: ['Sonnet', 'high'],
   'neon-low': ['Gemini Neon', 'low'],
   'neon-medium': ['Gemini Neon', 'medium'],
   'neon-high': ['Gemini Neon', 'high'],
@@ -427,6 +427,7 @@ const runModel = (a: AgentRun): string =>
 type Price = [input: number, output: number, cacheRead: number, cacheWrite: number]
 
 const PRICES: [RegExp, Price][] = [
+  [/(fable|mythos)-5-2/, [8, 40, 0.2, 16]],
   [/(fable|mythos)-5-1/, [10, 50, 0.25, 20]],
   [/fable|mythos/, [10, 50, 1, 20]],
   [/opus-5-5/, [4, 20, 0.2, 8]],

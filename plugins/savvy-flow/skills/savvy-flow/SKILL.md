@@ -37,10 +37,10 @@ Each provider has its own mode:
 | Mode | Meaning | What you do |
 |------|---------|-------------|
 | `normal` | On pace | Follow `tracks` |
-| `surplus` | Quota will expire unused | Spend this provider first. This changes who does the work, and never raises a Claude tier |
+| `surplus` | Quota will expire unused | Spend this provider first, except Claude's 5-hour reserve. This changes who does the work, and never raises a Claude tier |
 | `conserve` | Low, or ahead of weekly pace | Shift work to the other provider. On Claude: no Heavy or Fable, at most 3 workers per wave |
 | `blocked` | At the safety floor | Launch nothing on this provider until `waitUntil` |
-| `unknown` | No current reading | Do not route to it. For Gemini, keep the work on Claude |
+| `unknown` | No current reading | For Gemini, keep the work on Claude (`media` waits instead). For Claude (no reading yet, or an API key), follow `tracks` |
 
 Rules:
 - **You stay on Claude.** Planning, design decisions and final review are never delegated to Gemini.
@@ -51,9 +51,12 @@ Rules:
   - `review`: read-only second opinion on a diff or module
   - `hard`: unclear root cause, delicate invariants, or architecture
   - `test`: anything that must run code, always on Claude
+  - `media`: generating images, or reading video or audio, always on Gemini
 - Give each Gemini task a **size**: `s` is one file with a clear change, `m` a few files, `l` many files or heavy reasoning.
 - **Gemini workers cannot run commands.** Any task that needs to run code to get done goes on Claude, whatever `tracks` says. So does a `hard` investigation that needs to reproduce a failure.
-- When Gemini is usable, `tracks` deliberately sends routine tracks there to save Claude for orchestration and review. Section 3's tier rules choose among Claude tiers for the work that stays on Claude.
+- **Claude cannot generate images or read video or audio**, so `media` tasks run on Gemini. If Gemini is `blocked` or `unknown`, launch none of them: tell the user and go on with the rest. A screenshot, mockup or PDF that informs a code change stays on that change's track, because Claude reads those well.
+- `tracks` puts task fit first: `mechanical`, `design` and `review` go to Gemini, `code` and `hard` to Claude. Capacity can then move work: `hard` leaves Claude only when Claude is `blocked`, and routine work moves to Gemini when Claude's 5-hour quota is below its 40% reserve, which is kept for orchestration and review. Section 3's tier rules choose among Claude tiers for the work that stays on Claude.
+- Argon is off the automatic ladders. Use it with `--model` only when the user names it, or for algorithmic or long-video work.
 - If a new reading moves a task to another provider, say so in one line and go on. Ask only if the scope or risk changes.
 - The user's choice wins: if they name a provider or model, use it unless that provider is `blocked`.
 - Quota never justifies a tier that would get the task wrong. If the remaining capacity cannot do the plan safely, say so and ask what to cut or whether to wait.
@@ -113,7 +116,7 @@ Pick the cheapest tier that will get the task right the first time. Two axes: **
 | Medium | `savvy-medium` | Opus / medium | **Default tier.** Standard feature work, bug fixes with a known cause, changes confined to a few files with clear requirements |
 | Light | `savvy-light` | Opus / low | Mechanical edits, renames, boilerplate, config, small isolated fixes, running builds/tests and reporting |
 | Swarm | `savvy-swarm` | Sonnet / medium | Narrow, fully specified coding tasks fanned out in parallel: one function, component, endpoint, test file or migration per worker, with exact files and acceptance checks. Cheap enough to run many at once; you review each closely |
-| Tester | `savvy-tester` | Sonnet / medium | Independent testing of accepted-candidate work: writes and runs tests, exercises the change end to end, hunts edge cases and regressions, reports failures with repro steps. Never fixes product code |
+| Tester | `savvy-tester` | Sonnet / high | Independent testing of accepted-candidate work: writes and runs tests, exercises the change end to end, hunts edge cases and regressions, reports failures with repro steps. Never fixes product code |
 | Gemini | `gemini-worker` runner | Chosen from quota by track and size | Self-contained file edits and read-only reviews on the Gemini quota (section 4b). No terminal. Only with savvy-limits installed |
 
 Heuristics:
@@ -163,15 +166,17 @@ Both keep this conversation small: a subagent returns a summary, a session a sho
 - `title`: the task's title, verbatim (the panel matches it to the plan). Titles name the task; never put a tier, model or hero in them.
 - `context: "fresh"` and a `background` of at least 80 characters: the goal, decisions so far, and how this task fits.
 - `use_worktree: true` for any session that writes code; two writers never share files. A new worktree is cut from the repository's default branch: when the task needs work that is only on your current branch, commit it first and pass `source_branch` (that branch's name).
-- model and effort from the task's tier, **never above this session's own** (the app refuses higher anyway):
+- model and effort from the task's tier, **never above this session's own** (the app refuses or ignores higher). Always pass `model`: when omitted, the session inherits yours, so a Medium task under Fable would run on Fable:
 
   | Tier | `model` | `effort` |
   |------|---------|----------|
-  | Medium | omit (this session's) | `medium` |
-  | Careful | omit | `high` |
-  | Light | omit | `low` |
-  | Swarm, Tester | a Sonnet id (`claude-sonnet-5-5`) | `medium` |
-  | Heavy, Fable | only as section 3 allows, and only up to this session's own | |
+  | Medium | `claude-opus-5-5` | `medium` |
+  | Careful | `claude-opus-5-5` | `high` |
+  | Light | `claude-opus-5-5` | `low` |
+  | Swarm | `claude-sonnet-5-5` | `medium` |
+  | Tester | `claude-sonnet-5-5` | `high` |
+  | Heavy | `claude-opus-5-5`, only as section 3 allows | `xhigh` |
+  | Fable | `claude-fable-5-2`, only as section 3 allows | `high` |
 
 - `prompt`: the brief (section 4 rules) plus these lines for the session:
   > You are a worker session started by an orchestrating session. Do this task yourself: do not start further sessions or delegate it. Report progress with `mcp__savvy-progress__step` if that tool exists. When done, end with a short report: what changed and where, the branch or PR, what you verified, what you left out. If you need a decision, end your turn with the question and the options; do not guess.
@@ -208,7 +213,7 @@ A good Gemini task is self-contained, edits files without needing to run anythin
    ```
    node "<geminiWorker>" run --title "<task title>" --access <write|read> --kind <track> --size <s|m|l> --cwd "<project dir>" --brief-file "<brief file>"
    ```
-   `--title` is the task's title verbatim, so the panel matches it. Let the runner pick the model unless the user named one (`--model`). Use `--access read` for reviews. The run prints one JSON result with its `id`, `status`, `warnings`, `changes`, `worktree.path` and `response`, which holds a read run's findings. A read run sees the project's working tree, uncommitted changes included.
+   `--title` is the task's title verbatim, so the panel matches it. Let the runner pick the model unless the user named one (`--model`). Use `--access read` for reviews. The run prints one JSON result with its `id`, `status`, `warnings`, `changes`, `worktree.path` and `response`, which holds a read run's findings. A read run sees the project's working tree, uncommitted changes included. A `--kind media` write run copies generated images into `generated-media/` in its worktree (`--media-dir` changes the folder), so they appear in its diff. Antigravity makes images with Nano Banana 2, which cannot be switched to another image model here. These workers do not generate video. Look at every image before applying it.
 3. At most **2 Gemini workers** run at once, on disjoint files. Exit code 3 means quota is blocked and 4 means both slots are busy: re-read capacity, then wait or move the task to Claude.
 4. A write run works in its own git worktree cut from `HEAD`. If it depends on an earlier Gemini run, pass `--continue-from <id>`: it starts from that run's changes and its diff holds only its own. If it depends on other uncommitted work, keep it on Claude.
 5. Review it by section 5: read `status`, `warnings` and the full `diff <id>`, then run the project's checks and any visual review in `worktree.path`, yourself or through `savvy-tester`.
