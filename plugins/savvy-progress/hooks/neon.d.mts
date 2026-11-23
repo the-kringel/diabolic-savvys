@@ -8,4 +8,3 @@ export const NEON_TIERS: string[]
 export const NEON_COLOR: Record<string, string>
 export const NEON: Record<string, (f: Fill, t: string, kit: Kit) => void>
 export const NEON_CSS: string
-export function geminiWorkerType(model: string): string

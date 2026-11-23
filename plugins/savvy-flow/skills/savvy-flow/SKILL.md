@@ -72,7 +72,7 @@ Rules:
    - explicit dependencies between tasks;
    - a **tier** per task (section 3);
    - a **kind** per task: `subagent` or `session` (section 4a). Only when session mode is available (section 4a); otherwise every task is a subagent;
-   - a **provider** per task, when savvy-limits is installed (Capacity). A Gemini task has a track and size instead of a Claude tier. For the progress bar its tier is `neon-low`, `neon-medium`, `neon-high` or `neon-xhigh` when `gemini.recommendations` picks that Neon model, and `gemini` for any other Gemini model.
+   - a **provider** per task, when savvy-limits is installed (Capacity). A Gemini task has a track and size instead of a Claude tier. For the progress bar its tier names the model `gemini.recommendations` picks: `neon-low` to `neon-xhigh`, `hydrogen-low` to `hydrogen-xhigh`, or `argon-low` to `argon-high`. Use `gemini` for any other Gemini model.
 4. Present the plan to the user in a compact form: numbered tasks, tier, kind, dependency order. With savvy-limits, start it with one capacity line (`Capacity: Claude 5h 87% · wk 65% (use first) | Gemini 5h 95% · wk 99%`) and mark each Gemini task. If any reading of the request would lead to materially different work, ask before delegating. Otherwise proceed. When the plan has session tasks, end it with one line saying so (`Tasks 2, 4 and 5 run as their own sessions.`): the user's go-ahead on that plan is their request to start them.
 
 ## 1a. New project (greenfield)

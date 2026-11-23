@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.7.0 — 2026-11-23
+
+### savvy-progress 1.7.0
+
+- Seven new Gemini heroes. Hydrogen is a water crew: the Raindrop Scout (low), Wave Rider (medium), Deep Diver (high) and Tide King (xhigh). Argon is a lab: the Lab Assistant (low), Chemist (medium) and Plasma Professor (high).
+- Gemini models without a hero, such as Flash, still wear the Necromancer's robe.
+
+### savvy-limits 0.1.2
+
+- Routing no longer picks Gemini Flash. The lowest mechanical rung is now Hydrogen low.
+
+### savvy-flow 1.6.2
+
+- The plan can name Hydrogen and Argon heroes for Gemini tasks, so planned rows show the right hero.
+
+### Docs
+
+- New Hydrogen and Argon lineup images.
+
 ## 1.6.1 — 2026-11-23
 
 ### savvy-limits 0.1.1

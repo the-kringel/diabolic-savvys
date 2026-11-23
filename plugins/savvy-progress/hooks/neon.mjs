@@ -19,12 +19,6 @@ export const NEON_COLOR = {
   'neon-xhigh': '#9B4DFF',
 }
 
-// gemini-4-neon-high → savvy-neon-high; other Gemini models keep the generic worker.
-export const geminiWorkerType = model => {
-  const m = /^gemini-[\d.]+-neon-(low|medium|high|xhigh)\b/i.exec(String(model))
-  return m ? `savvy-neon-${m[1].toLowerCase()}` : 'savvy-gemini'
-}
-
 const legWarmers = (f, a, b) => {
   f(7, 24, 2, 2, a, 'la')
   f(17, 24, 2, 2, a, 'la')

@@ -49,6 +49,6 @@ The skill and the agents run fine alone. With the [savvy-progress](../savvy-prog
 
 ## Multi-model, with savvy-limits
 
-With the [savvy-limits](../savvy-limits) mod installed, the orchestrator reads Claude and Gemini quota before planning and before each wave, then gives each task a provider. Mechanical, design and review tracks can go to Gemini workers (Flash, Hydrogen, Neon, or Argon when named) through the official `agy` CLI, each in its own git worktree with no terminal. Image generation and reading video or audio always run on Gemini. Planning, design decisions, final review and anything that must run code stay on Claude. Name a provider or model in your task to choose it yourself. Without savvy-limits, every task runs on Claude.
+With the [savvy-limits](../savvy-limits) mod installed, the orchestrator reads Claude and Gemini quota before planning and before each wave, then gives each task a provider. Mechanical, design and review tracks can go to Gemini workers (Hydrogen, Neon, or Argon when named) through the official `agy` CLI, each in its own git worktree with no terminal. Image generation and reading video or audio always run on Gemini. Planning, design decisions, final review and anything that must run code stay on Claude. Name a provider or model in your task to choose it yourself. Without savvy-limits, every task runs on Claude.
 
 Install instructions are in the [repository README](../../README.md).

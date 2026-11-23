@@ -2,7 +2,7 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
 import type { AgentRun, Flow, Panel, Phase, PlannedTask } from '../types'
-import { NEON, NEON_COLOR, NEON_CSS, NEON_TIERS, geminiWorkerType } from './neon.mjs'
+import { GEMINI_COLOR, GEMINI_CSS, GEMINI_HEROES, GEMINI_MODEL, GEMINI_TIERS, geminiWorkerType } from './gemini-heroes.mjs'
 
 const flow = atom({ plugin: 'savvy-progress', key: 'flow' } as const, null)
 const agents = atom({ plugin: 'savvy-progress', key: 'agents' } as const, [])
@@ -23,7 +23,7 @@ const STEP_BRIEF = `
 Progress reporting: before any other work, call \`${STEP_TOOL}\` with \`total\` (your plan in 3-8 steps) and \`done: 0\`; call it again with \`done\` and a few-word \`note\` as each step finishes. It only draws a progress bar.`
 const PANE = 'savvy-agents'
 const PHASES: readonly Phase[] = ['plan', 'design', 'delegate', 'review', 'close']
-const TIERS: readonly string[] = ['fable', 'heavy', 'careful', 'medium', 'light', 'swarm', 'tester', 'gemini', ...NEON_TIERS]
+const TIERS: readonly string[] = ['fable', 'heavy', 'careful', 'medium', 'light', 'swarm', 'tester', 'gemini', ...GEMINI_TIERS]
 // The tools' schemas are advice to the model, not a check: what a call may ask
 // the band and the panel to draw is bounded here.
 const MAX_TASKS = 200
@@ -83,7 +83,7 @@ const STRINGS = {
     cantOpen: 'Open it from the sidebar: the app would not switch to it from here.',
     subagent: 'subagent',
     needsYou: 'needs you',
-    tier: { light: 'light', medium: 'medium', careful: 'careful', heavy: 'heavy', fable: 'fable', swarm: 'swarm', tester: 'tester', gemini: 'gemini', 'neon-low': 'neon low', 'neon-medium': 'neon medium', 'neon-high': 'neon high', 'neon-xhigh': 'neon xhigh', other: 'other' },
+    tier: { light: 'light', medium: 'medium', careful: 'careful', heavy: 'heavy', fable: 'fable', swarm: 'swarm', tester: 'tester', gemini: 'gemini', 'neon-low': 'neon low', 'neon-medium': 'neon medium', 'neon-high': 'neon high', 'neon-xhigh': 'neon xhigh', 'hydrogen-low': 'hydrogen low', 'hydrogen-medium': 'hydrogen medium', 'hydrogen-high': 'hydrogen high', 'hydrogen-xhigh': 'hydrogen xhigh', 'argon-low': 'argon low', 'argon-medium': 'argon medium', 'argon-high': 'argon high', other: 'other' },
     effort: { low: 'low', medium: 'medium', high: 'high', xhigh: 'xhigh', max: 'max' },
   },
   ru: {
@@ -121,7 +121,7 @@ const STRINGS = {
     cantOpen: 'Откройте её в боковой панели: приложение не переключилось на неё отсюда.',
     subagent: 'субагент',
     needsYou: 'ждёт вас',
-    tier: { light: 'light', medium: 'medium', careful: 'careful', heavy: 'heavy', fable: 'fable', swarm: 'swarm', tester: 'tester', gemini: 'gemini', 'neon-low': 'neon low', 'neon-medium': 'neon medium', 'neon-high': 'neon high', 'neon-xhigh': 'neon xhigh', other: 'other' },
+    tier: { light: 'light', medium: 'medium', careful: 'careful', heavy: 'heavy', fable: 'fable', swarm: 'swarm', tester: 'tester', gemini: 'gemini', 'neon-low': 'neon low', 'neon-medium': 'neon medium', 'neon-high': 'neon high', 'neon-xhigh': 'neon xhigh', 'hydrogen-low': 'hydrogen low', 'hydrogen-medium': 'hydrogen medium', 'hydrogen-high': 'hydrogen high', 'hydrogen-xhigh': 'hydrogen xhigh', 'argon-low': 'argon low', 'argon-medium': 'argon medium', 'argon-high': 'argon high', other: 'other' },
     effort: { low: 'low', medium: 'medium', high: 'high', xhigh: 'xhigh', max: 'max' },
   },
   he: {
@@ -159,7 +159,7 @@ const STRINGS = {
     cantOpen: 'פתחו אותו מהסרגל הצדדי: האפליקציה לא עברה אליו מכאן.',
     subagent: 'תת־סוכן',
     needsYou: 'ממתין לך',
-    tier: { light: 'קל', medium: 'בינוני', careful: 'זהיר', heavy: 'כבד', fable: 'פייבל', swarm: 'נחיל', tester: 'בודק', gemini: 'ג׳מיני', 'neon-low': 'ניאון נמוך', 'neon-medium': 'ניאון בינוני', 'neon-high': 'ניאון גבוה', 'neon-xhigh': 'ניאון גבוה מאוד', other: 'אחר' },
+    tier: { light: 'קל', medium: 'בינוני', careful: 'זהיר', heavy: 'כבד', fable: 'פייבל', swarm: 'נחיל', tester: 'בודק', gemini: 'ג׳מיני', 'neon-low': 'ניאון נמוך', 'neon-medium': 'ניאון בינוני', 'neon-high': 'ניאון גבוה', 'neon-xhigh': 'ניאון גבוה מאוד', 'hydrogen-low': 'מימן נמוך', 'hydrogen-medium': 'מימן בינוני', 'hydrogen-high': 'מימן גבוה', 'hydrogen-xhigh': 'מימן גבוה מאוד', 'argon-low': 'ארגון נמוך', 'argon-medium': 'ארגון בינוני', 'argon-high': 'ארגון גבוה', other: 'אחר' },
     effort: { low: 'נמוך', medium: 'בינוני', high: 'גבוה', xhigh: 'גבוה מאוד', max: 'מקסימלי' },
   },
 } as const
@@ -386,7 +386,7 @@ const TIER_COLOR: Record<string, string> = {
   swarm: '#C8A24A',
   tester: '#A8323E',
   gemini: '#B56BE0',
-  ...NEON_COLOR,
+  ...GEMINI_COLOR,
   other: '#888780',
 }
 
@@ -401,10 +401,7 @@ const TIER_MODEL: Record<string, [model: string, effort: string]> = {
   light: ['Opus', 'low'],
   swarm: ['Sonnet', 'medium'],
   tester: ['Sonnet', 'high'],
-  'neon-low': ['Gemini Neon', 'low'],
-  'neon-medium': ['Gemini Neon', 'medium'],
-  'neon-high': ['Gemini Neon', 'high'],
-  'neon-xhigh': ['Gemini Neon', 'xhigh'],
+  ...GEMINI_MODEL,
 }
 
 // "Opus · xhigh", with the effort word in the panel's language; '' for an unknown tier.
@@ -909,13 +906,13 @@ const COSTUMES: Record<string, (f: Fill, t: string) => void> = {
   plain: f => crabBody(f),
 }
 
-// The Gemini Neon ravers live in neon.mjs, which docs/gen-lineup.js draws from too.
-for (const [name, draw] of Object.entries(NEON)) COSTUMES[name] = (f, t) => draw(f, t, { crabBody, stamp })
+// The Gemini heroes live in gemini-heroes.mjs, which docs/gen-lineup.js draws from too.
+for (const [name, draw] of Object.entries(GEMINI_HEROES)) COSTUMES[name] = (f, t) => draw(f, t, { crabBody, stamp })
 
 // Explore and other agents have no tier color; their costumes get their own accent.
 const COSTUME_COLOR: Record<string, string> = { explore: '#C2477A', other: '#2AA5B5' }
 
-// Gemini models other than Neon wear the Necromancer's robe.
+// Gemini models without a hero of their own wear the Necromancer's robe.
 const wear = (tier: string): string => (tier === 'gemini' ? 'other' : tier)
 
 const costumeOf = (type: string): string => (type === 'Explore' ? 'explore' : wear(tierOf(type)))
@@ -973,7 +970,7 @@ const rowCrab = (W: number, x: number, y: number, costume: string, dim = false, 
   crab(mx(W, x, crabWidth(CRAB_SCALE)), y, costume, dim, isWalking, CRAB_SCALE, isRtl())
 
 const svg = (W: number, H: number, body: string): string =>
-  `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">${PANE_CSS}${CRAB_CSS}${NEON_CSS}${body}</svg>`
+  `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">${PANE_CSS}${CRAB_CSS}${GEMINI_CSS}${body}</svg>`
 
 // The pane's own title already says "Agents": the header names the flow, if any.
 const headerSvg = (W: number, title: string, t: ReturnType<typeof totals>): string => {

@@ -1,8 +1,8 @@
 # diabolic-savvys
 
-**Multi-model orchestration for [Claude Code](https://claude.com/claude-code).** Claude plans the work, owns the design and reviews every result, while workers run on Claude (Fable, Opus, Sonnet) or Gemini (Flash, Hydrogen, Neon, Argon), chosen by the task and by how much quota each provider has left.
+**Multi-model orchestration for [Claude Code](https://claude.com/claude-code).** Claude plans the work, owns the design and reviews every result, while workers run on Claude (Fable, Opus, Sonnet) or Gemini (Hydrogen, Neon, Argon), chosen by the task and by how much quota each provider has left.
 
-You can watch them work: Claude workers are Diablo 2 heroes, tuned to spend most of their time on Opus at medium effort, and Gemini Neon workers are 90s ravers.
+You can watch them work: Claude workers are Diablo 2 heroes, tuned to spend most of their time on Opus at medium effort, Gemini Neon workers are 90s ravers, Hydrogen workers are a water crew, and Argon workers are scientists.
 
 ![The lineup: Sorceress, Druid, Paladin, Barbarian, Assassin, Desert Mercenary, Deckard Cain, Amazon and Necromancer crabs](docs/lineup.svg)
 
@@ -37,7 +37,7 @@ To choose the model yourself, say so in the task. The flow follows your choice u
 
 | Track | Work | Default provider | Gemini models |
 | --- | --- | --- | --- |
-| `mechanical` | Renames, boilerplate, config | Gemini | Hydrogen, Flash when quota is low |
+| `mechanical` | Renames, boilerplate, config | Gemini | Hydrogen |
 | `code` | Features and fixes with a clear approach | Claude | Hydrogen, Neon |
 | `design` | UI built to a direction Claude set | Gemini | Neon |
 | `review` | Read-only second opinion | Gemini | Hydrogen, Neon |
@@ -68,7 +68,7 @@ Claude cannot generate images or read video or audio, so that work waits for Gem
 | Druid | `savvy-heavy` | Opus / xhigh | Exception: only after Careful failed, or when you ask. |
 | Sorceress | `savvy-fable` | Fable / high | Exception: only after Heavy failed, or when you ask. |
 | Amazon | Explore agents | any | Read-only searches. |
-| Necromancer | any other agent | any | Everything else, including Gemini models other than Neon. |
+| Necromancer | any other agent | any | Everything else, including Gemini models without their own hero. |
 
 How the orchestrator picks between them is in [plugins/savvy-flow](plugins/savvy-flow/README.md).
 
@@ -82,6 +82,27 @@ How the orchestrator picks between them is in [plugins/savvy-flow](plugins/savvy
 | Acid Raver | Gemini Neon / medium | Waves two. |
 | Vinyl DJ | Gemini Neon / high | Spins a record. |
 | Laser Boss | Gemini Neon / xhigh | Runs twin lasers and a live equalizer. |
+
+### The Hydrogen water crew
+
+![The Hydrogen water crew: Raindrop Scout, Wave Rider, Deep Diver and Tide King crabs](docs/hydrogen-lineup.svg)
+
+| Hero | Model | In the panel |
+| --- | --- | --- |
+| Raindrop Scout | Gemini Hydrogen / low | Keeps dry under an umbrella. |
+| Wave Rider | Gemini Hydrogen / medium | Sways with a surfboard. |
+| Deep Diver | Gemini Hydrogen / high | Swings a lantern among rising bubbles. |
+| Tide King | Gemini Hydrogen / xhigh | Raises a trident over a rippling tide. |
+
+### The Argon lab
+
+![The Argon lab: Lab Assistant, Chemist and Plasma Professor crabs](docs/argon-lineup.svg)
+
+| Hero | Model | In the panel |
+| --- | --- | --- |
+| Lab Assistant | Gemini Argon / low | Taps a clipboard. |
+| Chemist | Gemini Argon / medium | Swirls a bubbling flask. |
+| Plasma Professor | Gemini Argon / high | Holds a glowing argon globe while sparks jump. |
 
 ## Install
 
@@ -152,7 +173,7 @@ Based on claude-kit `savvy-flow` 1.2.0 and `savvy-progress` 1.2.1. Details per r
 - **Tiering leans on Opus / medium.** Medium is the default tier, Careful (Opus / high) the normal ceiling including for bugs. Heavy (xhigh) and Fable are exception tiers, used only after a failure one tier below or on request. Escalation goes one tier at a time.
 - **`savvy-swarm`** (Sonnet): narrow coding tasks fanned out in parallel waves of about 3–8 workers, each on its own files, reviewed by the orchestrator after every wave.
 - **`savvy-tester`** (Sonnet): tests a change independently after the worker that wrote it returns; its failures become the defect list.
-- **New heroes** in the panel: the Desert Mercenary (spear thrusts), Deckard Cain (cane taps, Identify scroll glows) and the four Neon ravers.
+- **New heroes** in the panel: the Desert Mercenary (spear thrusts), Deckard Cain (cane taps, Identify scroll glows) and eleven Gemini heroes: the Neon ravers, the Hydrogen water crew and the Argon lab.
 
 ## Customizing
 
@@ -170,6 +191,7 @@ plugins/savvy-progress/
   .claude-plugin/plugin.json        manifest and settings
   hooks/hooks.json                  points at the hooks module
   hooks/register.tsx                the mod: bar, panel, heroes
+  hooks/gemini-heroes.mjs           the Gemini heroes
   hooks/neon.mjs                    the Gemini Neon ravers
   types/index.d.ts                  its $.state contract
 plugins/savvy-limits/
