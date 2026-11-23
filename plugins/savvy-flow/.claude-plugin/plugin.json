@@ -1,7 +1,7 @@
 {
   "name": "savvy-flow",
-  "version": "1.5.0",
-  "description": "Orchestrated delivery flow: the session model plans, owns design and reviews; tiered workers implement. Opus on medium effort is the default tier, Opus on high the ceiling; Sonnet swarm workers fan out in parallel and a Sonnet tester checks the results. Pairs with savvy-progress.",
+  "version": "1.6.0",
+  "description": "Orchestrated delivery flow: the session model plans, owns design and reviews; tiered workers implement. Opus on medium effort is the default tier, Opus on high the ceiling; Sonnet swarm workers fan out in parallel and a Sonnet tester checks the results. Pairs with savvy-progress, and with savvy-limits to route dedicated tracks to Gemini by Claude and Gemini capacity.",
   "author": {
     "name": "the-kringel",
     "url": "https://github.com/the-kringel"
@@ -12,6 +12,8 @@
   "keywords": [
     "skill",
     "orchestration",
-    "subagents"
+    "subagents",
+    "multi-model",
+    "gemini"
   ]
 }

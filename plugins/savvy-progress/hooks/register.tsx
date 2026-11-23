@@ -2,6 +2,7 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
 import type { AgentRun, Flow, Panel, Phase, PlannedTask } from '../types'
+import { NEON, NEON_COLOR, NEON_CSS, NEON_TIERS, geminiWorkerType } from './neon.mjs'
 
 const flow = atom({ plugin: 'savvy-progress', key: 'flow' } as const, null)
 const agents = atom({ plugin: 'savvy-progress', key: 'agents' } as const, [])
@@ -22,7 +23,7 @@ const STEP_BRIEF = `
 Progress reporting: before any other work, call \`${STEP_TOOL}\` with \`total\` (your plan in 3-8 steps) and \`done: 0\`; call it again with \`done\` and a few-word \`note\` as each step finishes. It only draws a progress bar.`
 const PANE = 'savvy-agents'
 const PHASES: readonly Phase[] = ['plan', 'design', 'delegate', 'review', 'close']
-const TIERS: readonly string[] = ['fable', 'heavy', 'careful', 'medium', 'light', 'swarm', 'tester']
+const TIERS: readonly string[] = ['fable', 'heavy', 'careful', 'medium', 'light', 'swarm', 'tester', 'gemini', ...NEON_TIERS]
 // The tools' schemas are advice to the model, not a check: what a call may ask
 // the band and the panel to draw is bounded here.
 const MAX_TASKS = 200
@@ -82,7 +83,7 @@ const STRINGS = {
     cantOpen: 'Open it from the sidebar: the app would not switch to it from here.',
     subagent: 'subagent',
     needsYou: 'needs you',
-    tier: { light: 'light', medium: 'medium', careful: 'careful', heavy: 'heavy', fable: 'fable', swarm: 'swarm', tester: 'tester', other: 'other' },
+    tier: { light: 'light', medium: 'medium', careful: 'careful', heavy: 'heavy', fable: 'fable', swarm: 'swarm', tester: 'tester', gemini: 'gemini', 'neon-low': 'neon low', 'neon-medium': 'neon medium', 'neon-high': 'neon high', 'neon-xhigh': 'neon xhigh', other: 'other' },
     effort: { low: 'low', medium: 'medium', high: 'high', xhigh: 'xhigh', max: 'max' },
   },
   ru: {
@@ -120,7 +121,7 @@ const STRINGS = {
     cantOpen: 'Откройте её в боковой панели: приложение не переключилось на неё отсюда.',
     subagent: 'субагент',
     needsYou: 'ждёт вас',
-    tier: { light: 'light', medium: 'medium', careful: 'careful', heavy: 'heavy', fable: 'fable', swarm: 'swarm', tester: 'tester', other: 'other' },
+    tier: { light: 'light', medium: 'medium', careful: 'careful', heavy: 'heavy', fable: 'fable', swarm: 'swarm', tester: 'tester', gemini: 'gemini', 'neon-low': 'neon low', 'neon-medium': 'neon medium', 'neon-high': 'neon high', 'neon-xhigh': 'neon xhigh', other: 'other' },
     effort: { low: 'low', medium: 'medium', high: 'high', xhigh: 'xhigh', max: 'max' },
   },
   he: {
@@ -158,7 +159,7 @@ const STRINGS = {
     cantOpen: 'פתחו אותו מהסרגל הצדדי: האפליקציה לא עברה אליו מכאן.',
     subagent: 'תת־סוכן',
     needsYou: 'ממתין לך',
-    tier: { light: 'קל', medium: 'בינוני', careful: 'זהיר', heavy: 'כבד', fable: 'פייבל', swarm: 'נחיל', tester: 'בודק', other: 'אחר' },
+    tier: { light: 'קל', medium: 'בינוני', careful: 'זהיר', heavy: 'כבד', fable: 'פייבל', swarm: 'נחיל', tester: 'בודק', gemini: 'ג׳מיני', 'neon-low': 'ניאון נמוך', 'neon-medium': 'ניאון בינוני', 'neon-high': 'ניאון גבוה', 'neon-xhigh': 'ניאון גבוה מאוד', other: 'אחר' },
     effort: { low: 'נמוך', medium: 'בינוני', high: 'גבוה', xhigh: 'גבוה מאוד', max: 'מקסימלי' },
   },
 } as const
@@ -384,6 +385,8 @@ const TIER_COLOR: Record<string, string> = {
   light: '#1D9E75',
   swarm: '#C8A24A',
   tester: '#A8323E',
+  gemini: '#B56BE0',
+  ...NEON_COLOR,
   other: '#888780',
 }
 
@@ -398,17 +401,23 @@ const TIER_MODEL: Record<string, [model: string, effort: string]> = {
   light: ['Opus', 'low'],
   swarm: ['Sonnet', 'medium'],
   tester: ['Sonnet', 'medium'],
+  'neon-low': ['Gemini Neon', 'low'],
+  'neon-medium': ['Gemini Neon', 'medium'],
+  'neon-high': ['Gemini Neon', 'high'],
+  'neon-xhigh': ['Gemini Neon', 'xhigh'],
 }
 
 // "Opus · xhigh", with the effort word in the panel's language; '' for an unknown tier.
 const tierModel = (tier: string): string => {
+  // savvy-limits picks the Gemini model from quota when the worker starts.
+  if (tier === 'gemini') return 'Gemini'
   const m = TIER_MODEL[tier]
   return m ? `${m[0]} · ${effortWord(m[1])}` : ''
 }
 
 // "Opus 5.5 · low" for a run, or just the model when no effort was seen.
 const runModel = (a: AgentRun): string =>
-  (a.effort ? `${modelName(a.model)} · ${effortWord(a.effort)}` : modelName(a.model)) + (a.isApi ? ' · API' : '')
+  (a.effort ? `${modelName(a.model)} · ${effortWord(a.effort)}` : modelName(a.model)) + (a.isApi && !a.isGemini ? ' · API' : '')
 
 // USD per million tokens: input, output, cache read, cache write. The first row that
 // matches a model id wins, so a release sits above its family.
@@ -461,8 +470,9 @@ const costOf = (model: string, u: Usage, isRequest: boolean): number => {
   )
 }
 
-// Haiku 4.5 and the Claude 3 models have a 200K window; the rest, Haiku 5.5 included, 1M.
-const windowOf = (model: string): number => (/haiku-4|claude-3/i.test(model) ? 200_000 : 1_000_000)
+// Haiku 4.5 and the Claude 3 models have a 200K window, Gemini workers up to 512K; the rest, Haiku 5.5 included, 1M.
+const windowOf = (model: string): number =>
+  /^gemini-/i.test(model) ? 512_000 : /haiku-4|claude-3/i.test(model) ? 200_000 : 1_000_000
 
 // `savvy-careful`, or `savvy-flow:savvy-careful` when the agents ship in a plugin.
 const tierOf = (type: string): string => {
@@ -472,6 +482,12 @@ const tierOf = (type: string): string => {
 }
 
 const modelName = (id: string): string => {
+  // gemini-4-neon-xhigh → "Gemini Neon XHigh"
+  const gem = /^gemini-[\d.]+-([a-z]+)(?:-([a-z]+))?/i.exec(id)
+  if (gem) {
+    const word = (s: string) => (s.toLowerCase() === 'xhigh' ? 'XHigh' : `${s.charAt(0).toUpperCase()}${s.slice(1).toLowerCase()}`)
+    return ['Gemini', word(gem[1] ?? ''), gem[2] ? word(gem[2]) : ''].filter(Boolean).join(' ')
+  }
   const m = /(fable|mythos|opus|sonnet|haiku)-(\d+)(?:-(\d{1,2})(?!\d))?/i.exec(id)
   const [, family = '', major = '', minor] = m ?? []
   if (!family) return id.replace(/^claude-/, '').replace(/\[.*\]$/, '') || '—'
@@ -892,10 +908,16 @@ const COSTUMES: Record<string, (f: Fill, t: string) => void> = {
   plain: f => crabBody(f),
 }
 
+// The Gemini Neon ravers live in neon.mjs, which docs/gen-lineup.js draws from too.
+for (const [name, draw] of Object.entries(NEON)) COSTUMES[name] = (f, t) => draw(f, t, { crabBody, stamp })
+
 // Explore and other agents have no tier color; their costumes get their own accent.
 const COSTUME_COLOR: Record<string, string> = { explore: '#C2477A', other: '#2AA5B5' }
 
-const costumeOf = (type: string): string => (type === 'Explore' ? 'explore' : tierOf(type))
+// Gemini models other than Neon wear the Necromancer's robe.
+const wear = (tier: string): string => (tier === 'gemini' ? 'other' : tier)
+
+const costumeOf = (type: string): string => (type === 'Explore' ? 'explore' : wear(tierOf(type)))
 
 const CRAB_SCALE = 1.1
 
@@ -950,7 +972,7 @@ const rowCrab = (W: number, x: number, y: number, costume: string, dim = false, 
   crab(mx(W, x, crabWidth(CRAB_SCALE)), y, costume, dim, isWalking, CRAB_SCALE, isRtl())
 
 const svg = (W: number, H: number, body: string): string =>
-  `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">${PANE_CSS}${CRAB_CSS}${body}</svg>`
+  `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">${PANE_CSS}${CRAB_CSS}${NEON_CSS}${body}</svg>`
 
 // The pane's own title already says "Agents": the header names the flow, if any.
 const headerSvg = (W: number, title: string, t: ReturnType<typeof totals>): string => {
@@ -1087,7 +1109,7 @@ const plannedSvg = (W: number, p: Planned): string => {
   return svg(
     W,
     46,
-    `${rowCrab(W, 0, 6, tier, true)}
+    `${rowCrab(W, 0, 6, wear(tier), true)}
 <text class="s" ${startText(W, 42, 18)} font-family="${FONT}" font-size="13" font-weight="600">${xml(fitText(`${p.n}. ${p.title}`, 13, textW))}</text>
 <text ${startText(W, 42, 34)} font-family="${FONT}" font-size="11"><tspan fill="${color}">${xml(tierWord(tier))}</tspan><tspan class="m">  ${xml(meta.filter(Boolean).join('  ·  '))}</tspan></text>
 ${statusMark(mx(W, W - 8), 16, 'planned', color)}
@@ -1099,7 +1121,7 @@ const compactSvg = (W: number, list: AgentRun[], planned: Planned[], t: ReturnTy
   const icons = [
     ...list.filter(a => a.status === 'running').map(a => ({ k: costumeOf(a.type), c: a.isWaiting ? HAND : colorOf(tierOf(a.type)), s: 'running', dim: false })),
     ...list.filter(a => a.status !== 'running').map(a => ({ k: costumeOf(a.type), c: colorOf(tierOf(a.type)), s: a.status, dim: false })),
-    ...planned.map(p => ({ k: p.tier in TIER_COLOR ? p.tier : 'other', c: colorOf(p.tier), s: 'planned', dim: true })),
+    ...planned.map(p => ({ k: p.tier in TIER_COLOR ? wear(p.tier) : 'other', c: colorOf(p.tier), s: 'planned', dim: true })),
   ]
   const fit = Math.max(1, Math.floor((W - 150) / 36))
   const shown = icons.slice(0, fit)
@@ -1273,7 +1295,7 @@ async function syncApiWorkers($: EngineInterface): Promise<void> {
     const isStale = w.status === 'running' && at - Number(w.updatedAt ?? at) > API_STALE_MS
     changed.push({
       id: `api:${String(w.id)}`,
-      type: String(w.type ?? 'savvy-medium'),
+      type: w.provider === 'gemini' ? geminiWorkerType(model) : String(w.type ?? 'savvy-medium'),
       description: String(w.description ?? '').slice(0, MAX_TITLE),
       model,
       effort: typeof w.effort === 'string' ? w.effort : undefined,
@@ -1288,6 +1310,7 @@ async function syncApiWorkers($: EngineInterface): Promise<void> {
       round: 1,
       stepNote: typeof w.stepNote === 'string' ? w.stepNote.slice(0, MAX_TITLE) : undefined,
       isApi: true,
+      isGemini: w.provider === 'gemini',
     })
   }
   if (!changed.length) return

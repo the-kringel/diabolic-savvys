@@ -1,5 +1,28 @@
 # Changelog
 
+## 1.6.0 — 2026-11-23
+
+### savvy-limits 0.1.0 (new)
+
+- A telemetry band above the prompt with Claude and Gemini 5-hour and weekly meters, status badges and reset countdowns, in light and dark, and `/limits` for pace, reset times and the provider per track.
+- `mcp__savvy-limits__limits` gives the orchestrator both providers' capacity and a recommended provider for each work track.
+- Gemini workers through the official `agy` CLI: quota check, model routing, an isolated git worktree, denied-action detection, a two-worker limit, and paid AI credits forced off.
+
+### savvy-flow
+
+- New Capacity section: with savvy-limits installed, the orchestrator reads both providers' limits before planning and before each wave, and assigns each task a provider.
+- New section 4b: Gemini workers for self-contained file edits, read-only reviews and bounded design tracks. Planning, design decisions and final review stay on Claude.
+
+### savvy-progress
+
+- Gemini workers show in the agents panel with their model, steps and tokens.
+- Four new heroes for Gemini Neon, dressed for a 90s techno rave: the Glowstick Kid (low), Acid Raver (medium), Vinyl DJ (high) and Laser Boss (xhigh). Other Gemini models wear the Necromancer's robe.
+
+### Docs
+
+- The README and plugin catalog now describe multi-model orchestration: how work is routed between Claude and Gemini, its guardrails, the Neon ravers, and the Gemini account risk.
+- The lineup image has a fixed dark stage with readable captions on GitHub's light and dark themes, and a new Neon lineup image joins it.
+
 ## savvy-progress 1.5.2 — 2026-11-16
 
 - The agents panel stayed blank in a long session even with 1.5.1 loaded. Every worker and planned task was its own hero drawing of 12 to 19 KB, so a panel with a dozen workers was a drawing of about 280 KB. Only the first 8 rows (running workers first, then the newest finished, then the next planned tasks) get a hero now; the rest are one line of text. Whether the size was what the desktop app refused is not confirmed.

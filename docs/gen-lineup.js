@@ -56,7 +56,17 @@ const L=[['fable','#7F77DD','savvy-fable','Sorceress','Fable · high'],['heavy',
 const src=fs.readFileSync(path.join(root,'plugins/savvy-progress/hooks/register.tsx'),'utf8');
 const css=/const CRAB_CSS = `<style>([\s\S]*?)<\/style>`/.exec(src)[1];
 const W=150,cols=L.length,H=210;
-let out=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W*cols} ${H}" width="${W*cols}" height="${H}" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif"><style>${css} text{fill:#8B949E;font-size:13px;text-anchor:middle} .n{font-weight:600;font-size:14px} rect{shape-rendering:crispEdges}</style>`;
-L.forEach(([c,t,n,cls,m],i)=>{const cx=i*W+W/2;out+=crab(c,t,cx-60,20,4)+`<text class="n" x="${cx}" y="152" style="fill:${t}">${n}</text><text x="${cx}" y="172">${cls}</text><text x="${cx}" y="190">${m}</text>`});
+let out=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W*cols} ${H}" width="${W*cols}" height="${H}" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif"><style>${css} text{fill:#C9D0DB;font-size:13px;text-anchor:middle} .n{font-weight:700;font-size:14px;fill:#EEF1F5} rect{shape-rendering:crispEdges}</style><rect width="${W*cols}" height="${H}" fill="#2B303B"/>`;
+L.forEach(([c,t,n,cls,m],i)=>{const cx=i*W+W/2;out+=crab(c,t,cx-60,20,4)+`<rect x="${cx-14}" y="134" width="28" height="3" fill="${t}"/><text class="n" x="${cx}" y="152">${n}</text><text x="${cx}" y="172">${cls}</text><text x="${cx}" y="190">${m}</text>`});
 out+='</svg>\n';
 fs.writeFileSync(path.join(__dirname,'lineup.svg'),out);
+// The Neon ravers come straight from the mod's neon.mjs: docs/neon-lineup.svg.
+import(require('url').pathToFileURL(path.join(root,'plugins/savvy-progress/hooks/neon.mjs')).href).then(({NEON,NEON_COLOR,NEON_CSS})=>{
+ const kit=(st,body)=>({stamp:(_f,...a)=>st(...a),crabBody:(_f,a=0)=>body(a)});
+ for(const[k,draw]of Object.entries(NEON))C[k]=(f,t,st,body)=>draw(f,t,kit(st,body));
+ const R=[['neon-low','Glowstick Kid','Gemini Neon · low'],['neon-medium','Acid Raver','Gemini Neon · medium'],['neon-high','Vinyl DJ','Gemini Neon · high'],['neon-xhigh','Laser Boss','Gemini Neon · xhigh']];
+ const RW=190,RH=224,neon=/<style>([\s\S]*)<\/style>/.exec(NEON_CSS)[1];
+ let o=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${RW*R.length} ${RH}" width="${RW*R.length}" height="${RH}" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif"><style>${css}${neon} text{fill:#B1B9C6;font-size:13px;text-anchor:middle} .n{font-weight:700;font-size:15px} rect{shape-rendering:crispEdges}</style><rect width="${RW*R.length}" height="${RH}" fill="#0D0F13"/>`;
+ R.forEach(([c,name,m],i)=>{const cx=i*RW+RW/2;o+=crab(c,NEON_COLOR[c],cx-75,24,5)+`<text class="n" x="${cx}" y="186" style="fill:${NEON_COLOR[c]}">${name}</text><text x="${cx}" y="206">${m}</text>`});
+ fs.writeFileSync(path.join(__dirname,'neon-lineup.svg'),o+'</svg>\n');
+});
