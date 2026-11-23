@@ -40,6 +40,8 @@ export type AgentRun = {
   stepNote?: string
   /** A headless worker on API credit, read from .claude/api-workers by the savvy-api skill. */
   isApi?: boolean
+  /** A Gemini worker run by savvy-limits; it writes the same status file as an API worker. */
+  isGemini?: boolean
   /** A side session this session started with start_session; `id` is its app id (`local_…`). */
   kind?: 'session'
   /** The session waits for the person: a permission dialog or a question. */

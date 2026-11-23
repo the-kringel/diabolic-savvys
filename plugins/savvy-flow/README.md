@@ -47,4 +47,8 @@ With savvy-progress installed, side sessions show in the agents panel like subag
 
 The skill and the agents run fine alone. With the [savvy-progress](../savvy-progress) mod installed, the orchestrator reports the plan and accepted tasks to a progress bar above the prompt, and each worker reports its own steps to the agents panel. Without the mod those calls are skipped.
 
+## Multi-model, with savvy-limits
+
+With the [savvy-limits](../savvy-limits) mod installed, the orchestrator reads Claude and Gemini quota before planning and before each wave, then gives each task a provider. Routine tracks can go to Gemini workers (Flash, Hydrogen, Neon, Argon) through the official `agy` CLI, each in its own git worktree with no terminal. Planning, design decisions, final review and anything that must run code stay on Claude. Name a provider or model in your task to choose it yourself. Without savvy-limits, every task runs on Claude.
+
 Install instructions are in the [repository README](../../README.md).

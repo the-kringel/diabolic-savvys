@@ -1,17 +1,57 @@
 # diabolic-savvys
 
-**[savvy-flow](plugins/savvy-flow)** and **[savvy-progress](plugins/savvy-progress)** for [Claude Code](https://claude.com/claude-code), turned into diabolic minions: an orchestrated delivery flow where every worker is a Diablo 2 hero, tuned to spend most of its time on Opus at medium effort.
+**Multi-model orchestration for [Claude Code](https://claude.com/claude-code).** Claude plans the work, owns the design and reviews every result, while workers run on Claude (Fable, Opus, Sonnet) or Gemini (Flash, Hydrogen, Neon, Argon), chosen by the task and by how much quota each provider has left.
+
+You can watch them work: Claude workers are Diablo 2 heroes, tuned to spend most of their time on Opus at medium effort, and Gemini Neon workers are 90s ravers.
 
 ![The lineup: Sorceress, Druid, Paladin, Barbarian, Assassin, Desert Mercenary, Deckard Cain, Amazon and Necromancer crabs](docs/lineup.svg)
 
-A fork of [johnnyvizz/claude-kit](https://github.com/johnnyvizz/claude-kit) (MIT). The original design, the agents panel and the first seven heroes are theirs; this repo changes the tiering and adds the Sonnet heroes. See [what's different](#whats-different-from-upstream).
+A fork of [johnnyvizz/claude-kit](https://github.com/johnnyvizz/claude-kit) (MIT). The original design, the agents panel and the first seven heroes are theirs; this repo changes the tiering, adds the Sonnet heroes and adds Gemini workers. See [what's different](#whats-different-from-upstream).
 
 | Plugin | Type | What it does |
 | --- | --- | --- |
-| [savvy-flow](plugins/savvy-flow) | skill + agents | `/savvy-flow <task>`: the session model plans, owns design, delegates to tiered worker subagents and reviews their work. |
+| [savvy-flow](plugins/savvy-flow) | skill + agents | `/savvy-flow <task>`: the session model plans, owns design, delegates to tiered workers and reviews their work. |
 | [savvy-progress](plugins/savvy-progress) | mod | A progress bar above the prompt and a live agents panel where each worker walks across as its hero. |
+| [savvy-limits](plugins/savvy-limits) | mod | Claude and Gemini 5-hour and weekly limits above the prompt, capacity-aware routing for the flow, and Gemini workers through the official `agy` CLI. |
 
-Both work on their own and light up together: with both installed, the flow drives the bar and workers report their progress to the panel.
+Each works on its own, and they light up together: the flow drives the bar, workers report to the panel, and savvy-limits tells the flow which provider should take each task. Without savvy-limits or the Gemini CLI, all work stays on Claude.
+
+## Multi-model orchestration
+
+```
+/savvy-flow:savvy-flow Add rate limiting to the API
+```
+
+1. **Check capacity.** The orchestrator reads both providers' 5-hour and weekly quota before planning and before each wave.
+2. **Plan.** Each task gets a track, a provider, and a Claude tier or Gemini size.
+3. **Delegate.** Workers run in parallel on their own files.
+4. **Review.** Claude reads each diff, runs the checks, then accepts the work or sends it back with a list of defects.
+
+To choose the model yourself, say so in the task. The flow follows your choice unless that provider is at its limit:
+
+```
+/savvy-flow:savvy-flow Use a Gemini Neon worker to polish the settings page
+```
+
+### Who does what
+
+| Track | Work | Default provider | Gemini models |
+| --- | --- | --- | --- |
+| `mechanical` | Renames, boilerplate, config | Gemini | Flash, Hydrogen |
+| `code` | Features and fixes with a clear approach | Gemini | Hydrogen, Neon |
+| `design` | UI built to a direction Claude set | Gemini | Neon |
+| `review` | Read-only second opinion | Gemini | Hydrogen, Neon, Argon |
+| `hard` | Unclear root causes, architecture | Claude | Neon, Argon |
+| `test` | Anything that must run code | Claude, always | None |
+
+Capacity overrides the defaults. A provider whose quota would expire unused is spent first, a provider running low hands work to the other, and a blocked or unreadable provider gets none. The Gemini model choices are starting estimates, because Google publishes no per-model quota costs.
+
+### Guardrails
+
+- **Claude stays in charge.** Planning, design decisions and final review are never delegated to Gemini.
+- **Gemini works in isolation.** Each write run gets its own git worktree and no terminal, with at most two running at once. Nothing reaches your project until the orchestrator has reviewed and applied it.
+- **Gemini output is untrusted.** The orchestrator verifies its claims and never follows instructions found in it.
+- **Your Gemini account is left alone.** The plugin only launches the official `agy` CLI, never reads or reuses its login tokens, never skips its permission checks, and forces paid AI credits off.
 
 ## The party
 
@@ -25,13 +65,24 @@ Both work on their own and light up together: with both installed, the flow driv
 | Druid | `savvy-heavy` | Opus / xhigh | Exception: only after Careful failed, or when you ask. |
 | Sorceress | `savvy-fable` | Fable / high | Exception: only after Heavy failed, or when you ask. |
 | Amazon | Explore agents | any | Read-only searches. |
-| Necromancer | any other agent | any | Everything else. |
+| Necromancer | any other agent | any | Everything else, including Gemini models other than Neon. |
 
 How the orchestrator picks between them is in [plugins/savvy-flow](plugins/savvy-flow/README.md).
 
+### The Neon ravers
+
+![The Neon ravers: Glowstick Kid, Acid Raver, Vinyl DJ and Laser Boss crabs](docs/neon-lineup.svg)
+
+| Raver | Model | In the panel |
+| --- | --- | --- |
+| Glowstick Kid | Gemini Neon / low | Waves a glow stick. |
+| Acid Raver | Gemini Neon / medium | Waves two. |
+| Vinyl DJ | Gemini Neon / high | Spins a record. |
+| Laser Boss | Gemini Neon / xhigh | Runs twin lasers and a live equalizer. |
+
 ## Install
 
-> **Both plugins keep their upstream names.** If you have `savvy-flow` or `savvy-progress` from `claude-kit` installed, uninstall them first (`/plugin uninstall savvy-flow@claude-kit`, same for `savvy-progress`). Two copies with the same name cannot run side by side.
+> **savvy-flow and savvy-progress keep their upstream names.** If you have them installed from `claude-kit`, uninstall them first (`/plugin uninstall savvy-flow@claude-kit`, same for `savvy-progress`). Two copies with the same name cannot run side by side.
 
 ### From the marketplace
 
@@ -41,6 +92,7 @@ In Claude Code:
 /plugin marketplace add the-kringel/diabolic-savvys
 /plugin install savvy-flow@diabolic-savvys
 /plugin install savvy-progress@diabolic-savvys
+/plugin install savvy-limits@diabolic-savvys
 ```
 
 Then start a new session: running sessions load agents and mods only at startup. Plugin skills and agents are namespaced: the skill is `/savvy-flow:savvy-flow`, the agents `savvy-flow:savvy-medium` and so on.
@@ -61,10 +113,10 @@ cp -R ~/diabolic-savvys/plugins/savvy-flow/skills/savvy-flow ~/.claude/skills/
 cp ~/diabolic-savvys/plugins/savvy-flow/agents/*.md ~/.claude/agents/
 ```
 
-**The mod**, for one session:
+**The mods**, for one session:
 
 ```bash
-claude --plugin-dir ~/diabolic-savvys/plugins/savvy-progress
+claude --plugin-dir ~/diabolic-savvys/plugins/savvy-progress --plugin-dir ~/diabolic-savvys/plugins/savvy-limits
 ```
 
 or for every session (including the desktop app) through `env` in `~/.claude/settings.json`. Separate several folders with `:`, and append if the variable is already set:
@@ -72,28 +124,32 @@ or for every session (including the desktop app) through `env` in `~/.claude/set
 ```json
 {
   "env": {
-    "CLAUDE_CODE_PLUGIN_DIRS": "~/diabolic-savvys/plugins/savvy-progress"
+    "CLAUDE_CODE_PLUGIN_DIRS": "~/diabolic-savvys/plugins/savvy-progress:~/diabolic-savvys/plugins/savvy-limits"
   }
 }
 ```
 
-`git pull` in the clone updates a mod loaded this way; copied skills and agents need copying again.
+`git pull` in the clone updates mods loaded this way; copied skills and agents need copying again.
 
-The mod is built on function hooks (`hooks/register.tsx`), an early-access Claude Code API that may change between releases. If it does not show up after a marketplace install, load it by hand as above.
+The mods are built on function hooks (`hooks/register.tsx`), an early-access Claude Code API that may change between releases. If one does not show up after a marketplace install, load it by hand as above.
 
 ### Requirements
 
 - Access to Opus and Sonnet. `savvy-fable` needs the Fable model; without it, change `model:` in [`agents/savvy-fable.md`](plugins/savvy-flow/agents/savvy-fable.md) to `opus`.
 - The Sonnet workers pin `claude-sonnet-5-5`. Change `model:` in [`savvy-swarm.md`](plugins/savvy-flow/agents/savvy-swarm.md) and [`savvy-tester.md`](plugins/savvy-flow/agents/savvy-tester.md) if you want another one.
+- **Optional, for Gemini workers:** the [Antigravity CLI](https://antigravity.google/docs/getting-started/) (`agy`), installed and signed in.
+
+> **Gemini account risk.** Google's [Antigravity terms](https://antigravity.google/terms) ban using third-party tools to access the service and warn of suspension. They do not say whether another program may launch the official CLI, which Google documents for headless use. Decide for yourself whether that risk is acceptable for your account. Details are in [savvy-limits](plugins/savvy-limits/README.md#requirements-and-risk).
 
 ## What's different from upstream
 
 Based on claude-kit `savvy-flow` 1.2.0 and `savvy-progress` 1.2.1. Details per release are in [CHANGELOG.md](CHANGELOG.md).
 
+- **Multi-model routing.** The new `savvy-limits` plugin tracks Claude and Gemini quota and sends each task to the right provider, with Gemini workers running through the official `agy` CLI.
 - **Tiering leans on Opus / medium.** Medium is the default tier, Careful (Opus / high) the normal ceiling including for bugs. Heavy (xhigh) and Fable are exception tiers, used only after a failure one tier below or on request. Escalation goes one tier at a time.
 - **`savvy-swarm`** (Sonnet): narrow coding tasks fanned out in parallel waves of about 3–8 workers, each on its own files, reviewed by the orchestrator after every wave.
 - **`savvy-tester`** (Sonnet): tests a change independently after the worker that wrote it returns; its failures become the defect list.
-- **Two new heroes** in the panel: the Desert Mercenary (spear thrusts) and Deckard Cain (cane taps, Identify scroll glows).
+- **New heroes** in the panel: the Desert Mercenary (spear thrusts), Deckard Cain (cane taps, Identify scroll glows) and the four Neon ravers.
 
 ## Customizing
 
@@ -111,8 +167,15 @@ plugins/savvy-progress/
   .claude-plugin/plugin.json        manifest and settings
   hooks/hooks.json                  points at the hooks module
   hooks/register.tsx                the mod: bar, panel, heroes
+  hooks/neon.mjs                    the Gemini Neon ravers
   types/index.d.ts                  its $.state contract
-docs/                               lineup image, customizing guide
+plugins/savvy-limits/
+  .claude-plugin/plugin.json        manifest and settings
+  hooks/register.tsx                the mod: limits row, /limits, capacity tool
+  lib/capacity.mjs                  pace and provider routing
+  bin/gemini-worker.mjs             runs Gemini workers through agy
+  skills/savvy-gemini/SKILL.md      Gemini workers outside the flow
+docs/                               lineup images, customizing guide
 ```
 
 Check before publishing: `claude plugin validate plugins/<name>`, and the catalog with `claude plugin validate .`.

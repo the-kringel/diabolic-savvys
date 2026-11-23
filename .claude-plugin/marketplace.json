@@ -1,20 +1,27 @@
 {
   "name": "diabolic-savvys",
   "owner": { "name": "the-kringel", "url": "https://github.com/the-kringel" },
-  "metadata": { "description": "savvy-flow and savvy-progress, tuned toward Opus on medium effort, with Sonnet swarm workers and a Sonnet tester, every one of them dressed as a Diablo 2 hero." },
+  "metadata": { "description": "Multi-model orchestration for Claude Code: Claude plans and reviews while workers run on Claude (Fable, Opus, Sonnet) or Gemini, routed by task and remaining quota. Claude workers are Diablo 2 heroes, Gemini Neon workers are 90s ravers." },
   "plugins": [
     {
       "name": "savvy-flow",
       "source": "./plugins/savvy-flow",
-      "description": "Skill: plan, delegate to tiered worker subagents (Opus medium by default, Sonnet swarm and tester) or, in the desktop app, to side sessions; review.",
-      "version": "1.5.0",
+      "description": "Skill: multi-model orchestration. Plan, delegate to tiered Claude workers (Opus medium by default, Sonnet swarm and tester), side sessions in the desktop app, or Gemini workers with savvy-limits; review.",
+      "version": "1.6.0",
       "category": "skill"
     },
     {
       "name": "savvy-progress",
       "source": "./plugins/savvy-progress",
       "description": "Mod: progress bar above the prompt and a live agents panel where every worker, subagent or side session, is a Diablo 2 hero crab.",
-      "version": "1.5.2",
+      "version": "1.6.0",
+      "category": "mod"
+    },
+    {
+      "name": "savvy-limits",
+      "source": "./plugins/savvy-limits",
+      "description": "Mod: Claude and Gemini 5-hour and weekly limits above the prompt, a capacity tool for the savvy-flow orchestrator, and Gemini workers through the official agy CLI.",
+      "version": "0.1.0",
       "category": "mod"
     }
   ]

@@ -1,0 +1,33 @@
+{
+  "name": "savvy-limits",
+  "version": "0.1.0",
+  "description": "Tracks Claude Code and Gemini (Antigravity) 5-hour and weekly limits above the prompt, gives the savvy-flow orchestrator a capacity tool, and runs Gemini workers through the official agy CLI.",
+  "author": {
+    "name": "the-kringel",
+    "url": "https://github.com/the-kringel"
+  },
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "geminiPollMinutes": {
+      "type": "string",
+      "title": "Gemini quota refresh",
+      "description": "How often an active session re-reads Gemini quota through agy. off reads it only when asked.",
+      "default": "5",
+      "options": [
+        "2",
+        "5",
+        "15",
+        "off"
+      ]
+    }
+  },
+  "homepage": "https://github.com/the-kringel/diabolic-savvys/tree/main/plugins/savvy-limits",
+  "repository": "https://github.com/the-kringel/diabolic-savvys",
+  "license": "MIT",
+  "keywords": [
+    "mod",
+    "usage",
+    "limits",
+    "gemini"
+  ]
+}
