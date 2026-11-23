@@ -18,6 +18,7 @@ The runner is `node "${CLAUDE_PLUGIN_ROOT}/bin/gemini-worker.mjs"`.
    - `design`: UI, layout, visual and interaction work
    - `review`: independent reading of a diff or module
    - `hard`: architecture and stubborn debugging
+   - `media`: generating images, or reading video or audio. Write runs save images to `generated-media/` in the worktree (`--media-dir` changes the folder)
    - Size `s`, `m`, or `l` reflects scope and difficulty. Let the runner choose the model unless the user names one.
 3. Write a self-contained brief to a file in your scratchpad: goal, relevant files, constraints, acceptance checks, and what not to touch. Workers have **no terminal**, so builds and tests are yours to run afterward.
 4. Launch with the Bash tool and `run_in_background: true`:

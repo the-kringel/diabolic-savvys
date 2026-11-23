@@ -52,7 +52,7 @@ function crab(costume,t,x,y,s){
  const props=order.filter(k=>!['la','lb'].includes(k)).map(k=>`<g class="${k}">${g[k].join('')}</g>`).join('');
  return `<g transform="translate(${x},${y}) scale(${s})"><g class="c-${costume} run"><g class="bd">${g.bd.join('')}${props}</g><g class="la">${g.la.join('')}</g><g class="lb">${g.lb.join('')}</g></g></g>`;
 }
-const L=[['fable','#7F77DD','savvy-fable','Sorceress','Fable · high'],['heavy','#D85A30','savvy-heavy','Druid','Opus · xhigh'],['careful','#BA7517','savvy-careful','Paladin','Opus · high'],['medium','#378ADD','savvy-medium','Barbarian','Opus · medium'],['light','#1D9E75','savvy-light','Assassin','Opus · low'],['swarm','#C8A24A','savvy-swarm','Desert Mercenary','Sonnet · medium'],['tester','#A8323E','savvy-tester','Deckard Cain','Sonnet · medium'],['explore','#C2477A','Explore','Amazon','any model'],['other','#2AA5B5','other agents','Necromancer','any model']];
+const L=[['fable','#7F77DD','savvy-fable','Sorceress','Fable · high'],['heavy','#D85A30','savvy-heavy','Druid','Opus · xhigh'],['careful','#BA7517','savvy-careful','Paladin','Opus · high'],['medium','#378ADD','savvy-medium','Barbarian','Opus · medium'],['light','#1D9E75','savvy-light','Assassin','Opus · low'],['swarm','#C8A24A','savvy-swarm','Desert Mercenary','Sonnet · medium'],['tester','#A8323E','savvy-tester','Deckard Cain','Sonnet · high'],['explore','#C2477A','Explore','Amazon','any model'],['other','#2AA5B5','other agents','Necromancer','any model']];
 const src=fs.readFileSync(path.join(root,'plugins/savvy-progress/hooks/register.tsx'),'utf8');
 const css=/const CRAB_CSS = `<style>([\s\S]*?)<\/style>`/.exec(src)[1];
 const W=150,cols=L.length,H=210;

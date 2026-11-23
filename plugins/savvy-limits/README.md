@@ -11,11 +11,14 @@ A Claude Code mod that tracks your Claude Code and Gemini (Antigravity) 5-hour a
 
 | Track | Default | Why |
 |-------|---------|-----|
-| `mechanical`, `code`, `design`, `review` | Gemini | Saves Claude quota for orchestration and review |
-| `hard` | Claude | Hard judgment stays on Claude by default |
+| `mechanical`, `design`, `review` | Gemini | Saves Claude quota for orchestration and review |
+| `code`, `hard` | Claude | Code usually needs to run, and hard judgment stays on Claude |
 | `test` | Claude, always | Gemini workers have no terminal |
+| `media` | Gemini, always | Claude cannot generate images or read video and audio |
 
-Capacity overrides the defaults. A provider whose quota would expire unused is spent first, a low provider hands work to the other, and a blocked or unreadable provider gets none. Model ladders are starting estimates, because Google publishes no per-model quota costs.
+Capacity can then move work. A provider whose quota would expire unused is spent first, a low provider hands routine work to the other, and a blocked or unreadable provider gets none. `hard` leaves Claude only when Claude is blocked, and Claude keeps 40% of its 5-hour quota for orchestration and review. Argon runs only when you name it. Model ladders are starting estimates, because Google publishes no per-model quota costs.
+
+A `media` run copies its generated images into its worktree, so they go through review like any other change. Antigravity makes images with Nano Banana 2, which cannot be switched to another image model here. These workers do not generate video.
 
 ## Where the numbers come from
 

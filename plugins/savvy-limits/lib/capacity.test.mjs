@@ -1,7 +1,7 @@
 // Run with: node --test plugins/savvy-limits/lib/capacity.test.mjs
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { PERIOD_MS, allocate, assessPace, buildReport, claudeWindows, parseGeminiUsage, routeGemini, windowState } from './capacity.mjs'
+import { KINDS, LADDERS, PERIOD_MS, allocate, assessPace, buildReport, claudeWindows, parseGeminiUsage, routeGemini, windowState } from './capacity.mjs'
 
 const NOW = Date.parse('2026-11-23T20:00:00Z')
 const H = 3600e3
@@ -61,7 +61,7 @@ test('routing shifts with pace and stays inside the ladder', () => {
   assert.equal(routeGemini('code', 'm', { mode: 'normal' }), 'gemini-4-neon-medium')
   assert.equal(routeGemini('code', 'm', { mode: 'conserve' }), 'gemini-4-neon-low')
   assert.equal(routeGemini('code', 'm', { mode: 'surplus' }), 'gemini-4-neon-high')
-  assert.equal(routeGemini('hard', 'l', { mode: 'surplus' }), 'gemini-4-argon-high')
+  assert.equal(routeGemini('hard', 'l', { mode: 'surplus' }), 'gemini-4-neon-xhigh')
   assert.equal(routeGemini('code', 'm', { mode: 'blocked' }), null)
   assert.equal(routeGemini('code', 'm', { mode: 'unknown' }), null)
   assert.throws(() => routeGemini('nope', 'm', { mode: 'normal' }), /Unknown kind/)
@@ -69,18 +69,55 @@ test('routing shifts with pace and stays inside the ladder', () => {
 
 test('allocation balances providers and keeps testing on Claude', () => {
   const by = (c, g) => allocate({ mode: c }, { mode: g })
-  assert.equal(by('normal', 'normal').code.provider, 'gemini')
+  assert.equal(by('normal', 'normal').code.provider, 'claude')
+  assert.equal(by('normal', 'normal').mechanical.provider, 'gemini')
+  assert.equal(by('normal', 'normal').design.provider, 'gemini')
+  assert.equal(by('normal', 'normal').review.provider, 'gemini')
   assert.equal(by('normal', 'normal').hard.provider, 'claude')
-  assert.equal(by('surplus', 'normal').code.provider, 'claude')
-  assert.equal(by('normal', 'surplus').hard.provider, 'gemini')
-  assert.equal(by('conserve', 'normal').hard.provider, 'gemini')
-  assert.equal(by('normal', 'conserve').code.provider, 'claude')
+  assert.equal(by('surplus', 'normal').mechanical.provider, 'claude')
+  assert.equal(by('normal', 'surplus').code.provider, 'gemini')
+  assert.equal(by('normal', 'surplus').hard.provider, 'claude')
+  assert.equal(by('conserve', 'normal').code.provider, 'gemini')
+  assert.equal(by('conserve', 'normal').hard.provider, 'claude')
+  assert.equal(by('normal', 'conserve').design.provider, 'claude')
   assert.equal(by('blocked', 'normal').code.provider, 'gemini')
+  assert.equal(by('blocked', 'normal').hard.provider, 'gemini')
   assert.equal(by('normal', 'blocked').design.provider, 'claude')
   assert.equal(by('normal', 'unknown').code.provider, 'claude')
   for (const [c, g] of [['normal', 'surplus'], ['conserve', 'normal'], ['blocked', 'normal']]) {
     assert.equal(by(c, g).test.provider, 'claude')
   }
+})
+
+test("expiring Claude quota never spends its five-hour reserve", () => {
+  const claude = remaining => ({ mode: 'surplus', fiveHour: { remaining } })
+  const below = allocate(claude(34), { mode: 'normal' })
+  for (const kind of ['mechanical', 'code', 'design', 'review']) assert.equal(below[kind].provider, 'gemini')
+  assert.equal(below.hard.provider, 'claude')
+  assert.equal(below.test.provider, 'claude')
+  assert.equal(allocate(claude(40), { mode: 'normal' }).mechanical.provider, 'claude')
+  // With both providers low, each track goes where it fits.
+  const bothLow = allocate(claude(34), { mode: 'conserve' })
+  assert.equal(bothLow.code.provider, 'claude')
+  assert.equal(bothLow.mechanical.provider, 'gemini')
+})
+
+test('Argon runs only when a task names it', () => {
+  assert.equal(Object.values(LADDERS).flat().some(model => model.includes('argon')), false)
+  for (const kind of KINDS) {
+    for (const size of ['s', 'm', 'l']) {
+      for (const mode of ['normal', 'surplus']) assert.doesNotMatch(routeGemini(kind, size, { mode }), /flash|argon/)
+    }
+  }
+})
+
+test('media work stays on Gemini, whatever the quota', () => {
+  assert.equal(allocate({ mode: 'surplus' }, { mode: 'normal' }).media.provider, 'gemini')
+  assert.equal(allocate({ mode: 'normal' }, { mode: 'conserve' }).media.provider, 'gemini')
+  const blocked = allocate({ mode: 'normal' }, { mode: 'blocked' }).media
+  assert.equal(blocked.provider, 'gemini')
+  assert.match(blocked.reason, /unavailable/)
+  assert.equal(routeGemini('media', 's', { mode: 'normal' }), 'gemini-4-neon-medium')
 })
 
 test('a stale Gemini reading is never routed to', () => {

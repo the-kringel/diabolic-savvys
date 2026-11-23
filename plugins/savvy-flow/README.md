@@ -13,7 +13,7 @@ An orchestrated delivery flow for Claude Code. Run `/savvy-flow <task>` (`/savvy
   | `savvy-careful` | Paladin | Opus / high | **normal ceiling**: delicate changes, unclear bugs, investigations |
   | `savvy-light` | Assassin | Opus / low | mechanical edits, config, builds, tests |
   | `savvy-swarm` | Desert Mercenary | Sonnet / medium | narrow, fully specified tasks in parallel waves |
-  | `savvy-tester` | Deckard Cain | Sonnet / medium | independent testing of another worker's change |
+  | `savvy-tester` | Deckard Cain | Sonnet / high | independent testing of another worker's change |
   | `savvy-heavy` | Druid | Opus / xhigh | exception: after Careful failed, or on request |
   | `savvy-fable` | Sorceress | Fable / high | exception: after Heavy failed, or on request; design features on request |
 
@@ -36,7 +36,7 @@ For non-trivial changes, `savvy-tester` runs after the implementing worker retur
 
 In the Claude Code desktop app the orchestrator can run a task as its own **side session** instead of a subagent: a session for each deliverable (a branch, a PR, an asset), a subagent for each question (research, review, tests). The plan says which tasks run as sessions; your go-ahead on the plan starts them.
 
-- Each session gets the model and effort of its tier, never above the orchestrator's own: Medium runs at medium effort, Careful at high, Light at low, Swarm and Tester on Sonnet.
+- Each session gets the model and effort of its tier, never above the orchestrator's own: Medium, Careful and Light run on Opus at medium, high and low effort, Swarm on Sonnet at medium, and the Tester on Sonnet at high.
 - At most 4 sessions run at once; the rest wait their turn.
 - While sessions run, the main chat gets one line per event (`▶` started, `✓` done, `✋` needs you). A question from a session comes to the orchestrator's decision box; answer it there or in the session itself. Permission prompts are answered in the session.
 - Once a session's PR is merged, the orchestrator archives the session, removes its worktree, and deletes its branch locally and on GitHub, only when the branch is fully merged and was created by the flow.
@@ -49,6 +49,6 @@ The skill and the agents run fine alone. With the [savvy-progress](../savvy-prog
 
 ## Multi-model, with savvy-limits
 
-With the [savvy-limits](../savvy-limits) mod installed, the orchestrator reads Claude and Gemini quota before planning and before each wave, then gives each task a provider. Routine tracks can go to Gemini workers (Flash, Hydrogen, Neon, Argon) through the official `agy` CLI, each in its own git worktree with no terminal. Planning, design decisions, final review and anything that must run code stay on Claude. Name a provider or model in your task to choose it yourself. Without savvy-limits, every task runs on Claude.
+With the [savvy-limits](../savvy-limits) mod installed, the orchestrator reads Claude and Gemini quota before planning and before each wave, then gives each task a provider. Mechanical, design and review tracks can go to Gemini workers (Flash, Hydrogen, Neon, or Argon when named) through the official `agy` CLI, each in its own git worktree with no terminal. Image generation and reading video or audio always run on Gemini. Planning, design decisions, final review and anything that must run code stay on Claude. Name a provider or model in your task to choose it yourself. Without savvy-limits, every task runs on Claude.
 
 Install instructions are in the [repository README](../../README.md).

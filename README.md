@@ -37,14 +37,17 @@ To choose the model yourself, say so in the task. The flow follows your choice u
 
 | Track | Work | Default provider | Gemini models |
 | --- | --- | --- | --- |
-| `mechanical` | Renames, boilerplate, config | Gemini | Flash, Hydrogen |
-| `code` | Features and fixes with a clear approach | Gemini | Hydrogen, Neon |
+| `mechanical` | Renames, boilerplate, config | Gemini | Hydrogen, Flash when quota is low |
+| `code` | Features and fixes with a clear approach | Claude | Hydrogen, Neon |
 | `design` | UI built to a direction Claude set | Gemini | Neon |
-| `review` | Read-only second opinion | Gemini | Hydrogen, Neon, Argon |
-| `hard` | Unclear root causes, architecture | Claude | Neon, Argon |
+| `review` | Read-only second opinion | Gemini | Hydrogen, Neon |
+| `hard` | Unclear root causes, architecture | Claude | Neon |
 | `test` | Anything that must run code | Claude, always | None |
+| `media` | Generating images, reading video or audio | Gemini, always | Neon, with Nano Banana 2 for images |
 
-Capacity overrides the defaults. A provider whose quota would expire unused is spent first, a provider running low hands work to the other, and a blocked or unreadable provider gets none. The Gemini model choices are starting estimates, because Google publishes no per-model quota costs.
+Capacity can then move work. A provider whose quota would expire unused is spent first, a provider running low hands routine work to the other, and a blocked or unreadable provider gets none. `hard` work leaves Claude only when Claude is blocked, and Claude keeps 40% of its 5-hour quota for orchestration and review. Argon runs only when you name it. The Gemini model choices are starting estimates, because Google publishes no per-model quota costs.
+
+Claude cannot generate images or read video or audio, so that work waits for Gemini if its quota is unavailable. Screenshots, mockups and PDFs that inform a code change stay with that change, because Claude reads them well. The Gemini workers do not generate video.
 
 ### Guardrails
 
@@ -61,7 +64,7 @@ Capacity overrides the defaults. A provider whose quota would expire unused is s
 | Paladin | `savvy-careful` | Opus / high | **Normal ceiling.** Delicate changes, unclear bugs, investigations. |
 | Assassin | `savvy-light` | Opus / low | Mechanical edits, config, running builds and tests. |
 | Desert Mercenary | `savvy-swarm` | Sonnet / medium | Narrow, fully specified tasks, fanned out in parallel waves. |
-| Deckard Cain | `savvy-tester` | Sonnet / medium | Independently tests what other workers built. Never fixes code. |
+| Deckard Cain | `savvy-tester` | Sonnet / high | Independently tests what other workers built. Never fixes code. |
 | Druid | `savvy-heavy` | Opus / xhigh | Exception: only after Careful failed, or when you ask. |
 | Sorceress | `savvy-fable` | Fable / high | Exception: only after Heavy failed, or when you ask. |
 | Amazon | Explore agents | any | Read-only searches. |

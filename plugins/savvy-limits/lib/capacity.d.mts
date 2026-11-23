@@ -22,5 +22,5 @@ export function assessPace(windows: Windows | null, now?: number, limits?: Recor
   weeklyLead: number
 }
 export function routeGemini(kind: string, size: string, pace: { mode: Mode }): string | null
-export function allocate(claude: { mode: Mode }, gemini: { mode: Mode }): Record<Kind | 'test', Track>
+export function allocate(claude: { mode: Mode; fiveHour?: { remaining: number } | null }, gemini: { mode: Mode }): Record<Kind | 'test', Track>
 export function buildReport(input: { rateLimits: readonly RateLimit[] | undefined; gemini: GeminiReading | null; now?: number }): Report

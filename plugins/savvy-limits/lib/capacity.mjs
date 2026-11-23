@@ -16,16 +16,19 @@ export const LIMITS = {
   surplusWeeklyLead: 0.05,
   surplusWeeklyHours: 12,
   surplusWeeklyRemaining: 25,
+  claudeReserveFiveHour: 40, // % of Claude's five-hour quota kept for orchestration and review
 }
 
 // Ordered cheapest to strongest. Starting heuristics: Google publishes no per-model
-// quota costs, so the worker's ledger measures them over time.
+// quota costs, so the worker's ledger measures them over time. Argon is left out: it
+// trails Neon on Terminal-Bench 4.1, so it runs only when a task names it with --model.
 export const LADDERS = {
-  mechanical: ['gemini-3.8-flash-low', 'gemini-3.8-flash-medium', 'gemini-4-hydrogen-low', 'gemini-4-hydrogen-medium'],
+  mechanical: ['gemini-3.8-flash-medium', 'gemini-4-hydrogen-low', 'gemini-4-hydrogen-medium', 'gemini-4-hydrogen-high'],
   code: ['gemini-4-hydrogen-medium', 'gemini-4-neon-low', 'gemini-4-neon-medium', 'gemini-4-neon-high', 'gemini-4-neon-xhigh'],
   design: ['gemini-4-neon-low', 'gemini-4-neon-medium', 'gemini-4-neon-high', 'gemini-4-neon-xhigh'],
-  review: ['gemini-4-hydrogen-high', 'gemini-4-neon-medium', 'gemini-4-neon-high', 'gemini-4-argon-medium'],
-  hard: ['gemini-4-neon-high', 'gemini-4-neon-xhigh', 'gemini-4-argon-medium', 'gemini-4-argon-high'],
+  review: ['gemini-4-hydrogen-high', 'gemini-4-neon-medium', 'gemini-4-neon-high', 'gemini-4-neon-xhigh'],
+  hard: ['gemini-4-neon-high', 'gemini-4-neon-xhigh'],
+  media: ['gemini-4-hydrogen-medium', 'gemini-4-neon-medium', 'gemini-4-neon-high', 'gemini-4-neon-xhigh'],
 }
 
 export const KINDS = Object.keys(LADDERS)
@@ -130,17 +133,28 @@ export function routeGemini(kind, size, pace) {
 }
 
 const usable = pace => pace.mode !== 'blocked' && pace.mode !== 'unknown'
-const DEFAULT_PROVIDER = { mechanical: 'gemini', code: 'gemini', design: 'gemini', review: 'gemini', hard: 'claude' }
+// The provider each track suits when capacity does not decide. Gemini workers have no
+// terminal, so code that should be run while it is written starts on Claude.
+const TRACK_FIT = { mechanical: 'gemini', code: 'claude', design: 'gemini', review: 'gemini', hard: 'claude' }
 
 function pickProvider(kind, claude, gemini) {
+  // Claude has no image generation and no video or audio input, so quota cannot move this.
+  if (kind === 'media') return ['gemini', usable(gemini) ? 'Claude cannot generate images or read video and audio.' : 'Needs Gemini, which is unavailable right now.']
   if (!usable(gemini)) return ['claude', gemini.mode === 'blocked' ? 'Gemini is at its limit.' : 'Gemini quota is unavailable.']
   if (claude.mode === 'blocked') return ['gemini', 'Claude is at its limit.']
-  if (claude.mode === 'surplus' && gemini.mode !== 'surplus') return ['claude', 'Claude quota would expire unused.']
+  if (kind === 'hard') return ['claude', 'Hard judgment stays on Claude.']
+
+  const belowReserve = (claude.fiveHour?.remaining ?? 100) < LIMITS.claudeReserveFiveHour
+  const claudeLow = claude.mode === 'conserve' || belowReserve
+  const geminiLow = gemini.mode === 'conserve'
+  if (claudeLow && !geminiLow) {
+    return ['gemini', belowReserve ? "Keeps Claude's five-hour reserve for orchestration and review." : 'Claude quota is low.']
+  }
+  if (geminiLow && !claudeLow) return ['claude', 'Gemini quota is low.']
+  if (!claudeLow && claude.mode === 'surplus' && gemini.mode !== 'surplus') return ['claude', 'Claude quota would expire unused.']
   if (gemini.mode === 'surplus' && claude.mode !== 'surplus') return ['gemini', 'Gemini quota would expire unused.']
-  if (claude.mode === 'conserve' && gemini.mode !== 'conserve') return ['gemini', 'Claude quota is low.']
-  if (gemini.mode === 'conserve' && claude.mode !== 'conserve') return ['claude', 'Gemini quota is low.']
-  return kind === 'hard'
-    ? ['claude', 'Hard judgment stays on Claude by default.']
+  return TRACK_FIT[kind] === 'claude'
+    ? ['claude', 'Code that should be run stays on Claude.']
     : ['gemini', 'Saves Claude quota for orchestration and review.']
 }
 
