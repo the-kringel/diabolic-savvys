@@ -824,8 +824,16 @@ function cmdDiscard(id) {
       EXIT.usage,
     )
   }
-  git(run.worktree.repo, 'worktree', 'remove', '--force', run.worktree.path)
-  git(run.worktree.repo, 'branch', '-D', run.worktree.branch)
+  // Runs in a resume chain share one worktree and branch, so an earlier discard may already
+  // have removed them: only remove what is still there.
+  if (existsSync(run.worktree.path)) {
+    git(run.worktree.repo, 'worktree', 'remove', '--force', run.worktree.path)
+  } else {
+    gitTry(run.worktree.repo, 'worktree', 'prune')
+  }
+  if (gitTry(run.worktree.repo, 'rev-parse', '--verify', '--quiet', `refs/heads/${run.worktree.branch}`)) {
+    git(run.worktree.repo, 'branch', '-D', run.worktree.branch)
+  }
   print({ ok: true, discarded: id })
 }
 

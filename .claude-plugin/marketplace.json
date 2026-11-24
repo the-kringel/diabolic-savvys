@@ -21,7 +21,7 @@
       "name": "savvy-limits",
       "source": "./plugins/savvy-limits",
       "description": "Mod: Claude and Gemini 5-hour and weekly limits above the prompt, a capacity tool for the savvy-flow orchestrator, and Gemini workers and image generation through the official agy CLI.",
-      "version": "0.3.0",
+      "version": "0.3.1",
       "category": "mod"
     }
   ]
