@@ -7,7 +7,7 @@
       "name": "savvy-flow",
       "source": "./plugins/savvy-flow",
       "description": "Skill: multi-model orchestration. Plan, delegate to tiered Claude workers (Opus medium by default, Sonnet swarm and tester), side sessions in the desktop app, or Gemini workers with savvy-limits; review.",
-      "version": "1.6.3",
+      "version": "1.6.4",
       "category": "skill"
     },
     {
@@ -21,7 +21,7 @@
       "name": "savvy-limits",
       "source": "./plugins/savvy-limits",
       "description": "Mod: Claude and Gemini 5-hour and weekly limits above the prompt, a capacity tool for the savvy-flow orchestrator, and Gemini workers and image generation through the official agy CLI.",
-      "version": "0.2.0",
+      "version": "0.3.0",
       "category": "mod"
     }
   ]
