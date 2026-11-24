@@ -46,7 +46,7 @@ test('the row shows both providers, percent left', async ($, on) => {
   expect(await ui.find({ text: /95%/ })).toBeDefined()
 })
 
-test('the tool returns limits, tracks and the worker path', async ($, on) => {
+test('the tool returns limits, tracks and the runner paths', async ($, on) => {
   const { calls } = await setup($ as never, on as never, () => ({ exitCode: 0, stdout: USAGE, stderr: '' }))
   const out = await $.tool.call({ tool: 'mcp__savvy-limits__limits', refresh: true } as never)
   const r = JSON.parse(String((out as { result: unknown }).result))
@@ -54,6 +54,7 @@ test('the tool returns limits, tracks and the worker path', async ($, on) => {
   expect(r.gemini.weekly.remainingPct).toBe(98)
   expect(r.tracks.test.provider).toBe('claude')
   expect(r.geminiWorker).toContain('/bin/gemini-worker.mjs')
+  expect(r.geminiImage).toContain('/bin/gemini-image.mjs')
   expect(calls.every(c => c.includes('/usage') && !c.includes('--dangerously-skip-permissions'))).toBe(true)
 })
 

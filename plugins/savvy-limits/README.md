@@ -6,6 +6,7 @@ A Claude Code mod that tracks your Claude Code and Gemini (Antigravity) 5-hour a
 - **`/limits`**: pace, reset times and the provider for each work track. `/limits refresh` re-reads Gemini now, and `/limits hide` or `/limits show` toggles the row.
 - **`mcp__savvy-limits__limits`**: the same data for the orchestrator.
 - **Gemini workers**: `bin/gemini-worker.mjs` checks quota, picks a model by track and size, runs `agy` in its own git worktree, and reports to the savvy-progress panel. The `savvy-gemini` skill uses it outside the flow.
+- **Gemini images**: `bin/gemini-image.mjs` makes images from a prompt, with optional reference images, through Antigravity's image generator on a cheap driver model, without a worktree. It retries Gemini capacity outages and can fall back to a gpt-image skill. It uses only Node built-ins, so it can also be copied into `~/.claude/skills` as a standalone skill.
 
 ## How work is split
 
@@ -18,7 +19,7 @@ A Claude Code mod that tracks your Claude Code and Gemini (Antigravity) 5-hour a
 
 Capacity can then move work. A provider whose quota would expire unused is spent first, a low provider hands routine work to the other, and a blocked or unreadable provider gets none. `hard` leaves Claude only when Claude is blocked, and Claude keeps 40% of its 5-hour quota for orchestration and review. Argon runs only when you name it. Model ladders are starting estimates, because Google publishes no per-model quota costs.
 
-A `media` run copies its generated images into its worktree, so they go through review like any other change. Antigravity makes images with Nano Banana 2, which cannot be switched to another image model here. These workers do not generate video.
+A `media` run copies its generated images into its worktree, so they go through review like any other change. For images alone, `gemini-image.mjs` is faster and uses far less quota: a full worker spent about 3% of the 5-hour quota on a run that made no images, while `gemini-image.mjs` reports a capacity outage within about 15 seconds. Antigravity makes images with Nano Banana 2, which cannot be switched to another image model here. These workers do not generate video.
 
 ## Where the numbers come from
 
