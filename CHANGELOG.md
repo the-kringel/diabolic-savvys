@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.7.2 — 2026-11-24
+
+### savvy-limits 0.3.0
+
+- Extended `bin/gemini-worker.mjs` (plus new `lib/worker-config.mjs` and `bin/gemini-worker.test.mjs`) so Gemini Neon workers can carry coding tasks end-to-end — edit, run scoped build/test commands, fix errors, commit, and resume — without `--dangerously-skip-permissions`.
+- Per-project profiles (`<project>/.savvy/gemini.json`, selected with `--profile default` or `--profile <path|name>`) configure scoped `allowCommands` / `denyCommands`, external `readPaths` and cache `writePaths` (with `%VAR%`, `${VAR}`, and `~` expansion), `allowLocalhost`, and `commandTimeoutMin` / `timeoutMin`. Blanket wildcard allow rules are rejected.
+- Added `--worktree <path>` and `--in-place` to run directly inside an existing checkout/branch (preserving uncommitted or mid-merge state) while keeping fresh managed worktrees as the default. `apply` and `discard` refuse unmanaged checkouts.
+- Added `resume <run-id> --brief-file <followup>` using `agy --conversation <id>` to continue the same agent conversation in the same worktree/checkout with per-turn token deltas (`turnUsage`).
+- Enriched JSON results with `commit`, `head`, `commits`, `commands`, `deniedActions`, `eventLog` (`runs/<id>.events.jsonl`), and distinct exit codes (`3` quota, `4` slots busy, `5` permission denied, `6` command failure).
+
+### savvy-flow 1.6.4
+
+- Updated Capacity, Tiering, and section 4b so the orchestrator knows when a Gemini Neon worker with `<project>/.savvy/gemini.json` may take `code` tasks that run scoped builds/tests and commit, and prefers `resume <id>` for return rounds.
+
 ## 1.7.1 — 2026-11-24
 
 ### savvy-limits 0.2.0
