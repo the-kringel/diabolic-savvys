@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.7.3 — 2026-11-24
+
+### savvy-limits 0.3.1
+
+- `gemini-worker.mjs discard <id>` no longer fails when the run's worktree or branch is already gone. Runs in a `resume` chain share one worktree and branch, so discarding one of them used to make `discard` on the others exit 1 with "is not a working tree".
+
 ## 1.7.2 — 2026-11-24
 
 ### savvy-limits 0.3.0
