@@ -30,7 +30,7 @@ When delegating, pass the task's `title` verbatim as the Agent tool's `descripti
 
 If the tool `mcp__savvy-limits__limits` appears among your tools, including as a deferred tool, capacity decides who does the work. Without it, skip this section and every Gemini step: all tasks run on Claude.
 
-Call it with `refresh: true` before planning, and again before each new wave. It returns each provider's remaining 5-hour and weekly quota, a `mode`, the recommended provider per track (`tracks`), Gemini models by kind and size (`gemini.recommendations`), and the runner's path (`geminiWorker`).
+Call it with `refresh: true` before planning, and again before each new wave. It returns each provider's remaining 5-hour and weekly quota, a `mode`, the recommended provider per track (`tracks`), Gemini models by kind and size (`gemini.recommendations`), and the runners' paths (`geminiWorker`, and `geminiImage` for images only).
 
 Each provider has its own mode:
 
@@ -54,7 +54,7 @@ Rules:
   - `media`: generating images, or reading video or audio, always on Gemini
 - Give each Gemini task a **size**: `s` is one file with a clear change, `m` a few files, `l` many files or heavy reasoning.
 - **Gemini workers cannot run commands.** Any task that needs to run code to get done goes on Claude, whatever `tracks` says. So does a `hard` investigation that needs to reproduce a failure.
-- **Claude cannot generate images or read video or audio**, so `media` tasks run on Gemini. If Gemini is `blocked` or `unknown`, launch none of them: tell the user and go on with the rest. A screenshot, mockup or PDF that informs a code change stays on that change's track, because Claude reads those well.
+- **Claude cannot generate images or read video or audio**, so `media` tasks run on Gemini. If Gemini is `blocked` or `unknown`, launch none of them: tell the user and go on with the rest. A task that only makes images from a prompt (concept art, icons, sprites) goes to `geminiImage` (section 4b), not a worker. A screenshot, mockup or PDF that informs a code change stays on that change's track, because Claude reads those well.
 - `tracks` puts task fit first: `mechanical`, `design` and `review` go to Gemini, `code` and `hard` to Claude. Capacity can then move work: `hard` leaves Claude only when Claude is `blocked`, and routine work moves to Gemini when Claude's 5-hour quota is below its 40% reserve, which is kept for orchestration and review. Section 3's tier rules choose among Claude tiers for the work that stays on Claude.
 - Argon is off the automatic ladders. Use it with `--model` only when the user names it, or for algorithmic or long-video work.
 - If a new reading moves a task to another provider, say so in one line and go on. Ask only if the scope or risk changes.
@@ -214,6 +214,12 @@ A good Gemini task is self-contained, edits files without needing to run anythin
    node "<geminiWorker>" run --title "<task title>" --access <write|read> --kind <track> --size <s|m|l> --cwd "<project dir>" --brief-file "<brief file>"
    ```
    `--title` is the task's title verbatim, so the panel matches it. Let the runner pick the model unless the user named one (`--model`). Use `--access read` for reviews. The run prints one JSON result with its `id`, `status`, `warnings`, `changes`, `worktree.path` and `response`, which holds a read run's findings. A read run sees the project's working tree, uncommitted changes included. A `--kind media` write run copies generated images into `generated-media/` in its worktree (`--media-dir` changes the folder), so they appear in its diff. Antigravity makes images with Nano Banana 2, which cannot be switched to another image model here. These workers do not generate video. Look at every image before applying it.
+
+   **Images only:** when a task just makes images from a prompt (no file edits, no reading the repo), skip the worker and run `geminiImage` from the limits tool once per image, with `run_in_background: true`:
+   ```
+   node "<geminiImage>" -p "<image prompt>" -o "<project>/docs/concept/<name>.png" [-i <reference images>] [--aspect square|landscape|portrait|wide|tall]
+   ```
+   It drives Antigravity's image generator with a cheap model in a throwaway folder: a few thousand tokens instead of a full worker run. It needs no worktree or brief file. It prints JSON with the real `saved` paths (Nano Banana usually returns JPEG, so `.png` can become `.jpg`). On a Gemini capacity outage (503) it waits and retries, then falls back to the user's gpt-image skill when that is installed (`"provider": "gpt-image"`). Pass `--fallback none` when the user wants Gemini only. Exit 5 means Gemini still had no image capacity and no fallback worked, and 3 means Gemini quota is used up: tell the user and go on with the rest. Look at every image before using it.
 3. At most **2 Gemini workers** run at once, on disjoint files. Exit code 3 means quota is blocked and 4 means both slots are busy: re-read capacity, then wait or move the task to Claude.
 4. A write run works in its own git worktree cut from `HEAD`. If it depends on an earlier Gemini run, pass `--continue-from <id>`: it starts from that run's changes and its diff holds only its own. If it depends on other uncommitted work, keep it on Claude.
 5. Review it by section 5: read `status`, `warnings` and the full `diff <id>`, then run the project's checks and any visual review in `worktree.path`, yourself or through `savvy-tester`.

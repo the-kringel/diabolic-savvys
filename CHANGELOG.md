@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.7.1 — 2026-11-24
+
+### savvy-limits 0.2.0
+
+- New `bin/gemini-image.mjs` makes images through Antigravity's image generator (Nano Banana 2) with your Google AI Pro login. It uses a cheap driver model in a throwaway folder and needs no worktree or brief. It accepts reference images, returns the real file type (usually JPEG), retries Gemini capacity outages (HTTP 503), and falls back to a gpt-image skill if one is installed (`--fallback none` turns this off).
+- The limits tool also returns `geminiImage`, the image runner's path.
+- A `media` worker run that makes no images now warns about it, and names the capacity outage when that was the cause. agy reported these runs as successes.
+
+### savvy-flow 1.6.3
+
+- Tasks that only make images go to `geminiImage` instead of a full Gemini worker.
+
 ## 1.7.0 — 2026-11-23
 
 ### savvy-progress 1.7.0

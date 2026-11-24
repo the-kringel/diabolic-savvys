@@ -159,8 +159,8 @@ export const register: Register = (on, options) => {
       await readClaude($)
       await refreshGemini($, input.refresh === true)
       const current = await publish($)
-      const geminiWorker = `${$.plugin.root}/bin/gemini-worker.mjs`.replaceAll('\\', '/')
-      return { result: JSON.stringify({ ...current, geminiWorker }) }
+      const bin = (name: string) => `${$.plugin.root}/bin/${name}`.replaceAll('\\', '/')
+      return { result: JSON.stringify({ ...current, geminiWorker: bin('gemini-worker.mjs'), geminiImage: bin('gemini-image.mjs') }) }
     } catch (err) {
       return { result: `Could not read limits: ${err instanceof Error ? err.message : String(err)}` }
     }

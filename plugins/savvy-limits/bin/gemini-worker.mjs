@@ -349,6 +349,13 @@ async function cmdRun(v) {
     const ok = status === 'SUCCESS'
     const warnings = []
     if (ok && access === 'write' && changes.files.length === 0) warnings.push('Agent reported success but changed no files.')
+    // agy reports SUCCESS when the agent stops cleanly after every image call failed.
+    if (kind === 'media' && access === 'write' && media.length === 0) {
+      const capacity = /no capacity available|\bUNAVAILABLE\b|\b503\b/i.test(envelope?.response ?? '')
+      warnings.push(capacity
+        ? 'No images were generated: Gemini image capacity was unavailable (503). Retry later with gemini-image.mjs.'
+        : 'No images were generated.')
+    }
     if (denied.length) warnings.push(`Denied actions: ${denied.map(d => d.action).join(', ')}.`)
     if (quotaError) warnings.push(`Could not read quota after the run: ${quotaError}`)
     if (worktree?.sourceHadUncommittedChanges) warnings.push('Source repo had uncommitted changes that the worktree does not include.')
