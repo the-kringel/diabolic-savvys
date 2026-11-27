@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.8.0 — 2026-11-27
+
+### savvy-flow 1.7.0
+
+Tier rules retuned after measuring 59 real flow sessions: workers took 86% of the spend, Careful ran more often than the Medium default, `savvy-swarm` never ran, and with an Opus orchestrator the Opus workers saved nothing on price.
+
+- Fully specified tasks (exact files, behaviour, edge cases, the check that proves them done) now default to `savvy-swarm` (Sonnet / medium), alone or in parallel waves. Work that needs judgment stays on Medium.
+- Careful runs only on a named trigger: an invariant across files or releases, concurrency or ordering, a refactor across several modules, security or data-loss risk, or a bug whose cause is unclear. The plan shows the trigger. Unsure with no trigger now means Medium instead of Careful.
+- Bugs with an unclear cause split into a Careful investigation and a Swarm or Medium fix.
+- The orchestrator's own model sets the lane: on Fable, cheaper workers save on price; on Opus, delegation is for parallel work and a clean context, and Fable workers run only on request.
+- The escalation ladder starts at Swarm: Swarm → Medium → Careful → Heavy → Fable.
+
 ## 1.7.3 — 2026-11-24
 
 ### savvy-limits 0.3.1
