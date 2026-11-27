@@ -1,7 +1,7 @@
 {
   "name": "savvy-limits",
-  "version": "0.3.1",
-  "description": "Tracks Claude Code and Gemini (Antigravity) 5-hour and weekly limits above the prompt, gives the savvy-flow orchestrator a capacity tool, and runs Gemini workers through the official agy CLI.",
+  "version": "0.4.0",
+  "description": "Tracks Claude Code and Gemini (Antigravity) 5-hour and weekly limits, gives the savvy-flow orchestrator a capacity tool, and runs Gemini workers through the official agy CLI.",
   "author": {
     "name": "the-kringel",
     "url": "https://github.com/the-kringel"

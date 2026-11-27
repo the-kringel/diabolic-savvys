@@ -37,15 +37,6 @@ const setup = async ($: never, on: never, agy: () => { exitCode: number; stdout:
   return { clock, calls }
 }
 
-test('the row shows both providers, percent left', async ($, on) => {
-  await setup($ as never, on as never, () => ({ exitCode: 0, stdout: USAGE, stderr: '' }))
-  const ui = await $.ui.mount({ plugin: PLUGIN, surface: 'terminal', component: 'AbovePrompt', props: {} as never })
-  expect(await ui.find({ text: /Claude/ })).toBeDefined()
-  expect(await ui.find({ text: /87%/ })).toBeDefined()
-  expect(await ui.find({ text: /Gemini/ })).toBeDefined()
-  expect(await ui.find({ text: /95%/ })).toBeDefined()
-})
-
 test('the tool returns limits, tracks and the runner paths', async ($, on) => {
   const { calls } = await setup($ as never, on as never, () => ({ exitCode: 0, stdout: USAGE, stderr: '' }))
   const out = await $.tool.call({ tool: 'mcp__savvy-limits__limits', refresh: true } as never)
