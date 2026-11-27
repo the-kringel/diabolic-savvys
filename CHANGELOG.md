@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.9.0 — 2026-11-27
+
+### site-crew 0.1.0 (listed)
+
+- The marketplace lists [site-crew](https://github.com/the-kringel/Site-crew), a standalone mod that lives in its own repository: every subagent and side session a session starts, nested as they start each other, drawn as a construction crew. Install it as `site-crew@diabolic-savvys` or straight from its repository.
+
 ## 1.8.0 — 2026-11-27
 
 ### savvy-flow 1.7.0

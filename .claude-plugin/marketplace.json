@@ -23,6 +23,13 @@
       "description": "Mod: Claude and Gemini 5-hour and weekly limits above the prompt, a capacity tool for the savvy-flow orchestrator, and Gemini workers and image generation through the official agy CLI.",
       "version": "0.3.1",
       "category": "mod"
+    },
+    {
+      "name": "site-crew",
+      "source": { "source": "github", "repo": "the-kringel/Site-crew" },
+      "description": "Mod: a live panel of every subagent and side session a session starts, nested as they spawn each other, drawn as a construction crew from apprentice to architect. Works with plain Claude Code; lives in its own repository.",
+      "version": "0.1.0",
+      "category": "mod"
     }
   ]
 }

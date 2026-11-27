@@ -13,6 +13,7 @@ A fork of [johnnyvizz/claude-kit](https://github.com/johnnyvizz/claude-kit) (MIT
 | [savvy-flow](plugins/savvy-flow) | skill + agents | `/savvy-flow <task>`: the session model plans, owns design, delegates to tiered workers and reviews their work. |
 | [savvy-progress](plugins/savvy-progress) | mod | A progress bar above the prompt and a live agents panel where each worker walks across as its hero. |
 | [savvy-limits](plugins/savvy-limits) | mod | Claude and Gemini 5-hour and weekly limits above the prompt, capacity-aware routing for the flow, and Gemini workers and image generation through the official `agy` CLI. |
+| [site-crew](https://github.com/the-kringel/Site-crew) | mod | Standalone, in its own repository: every subagent and side session your session starts, nested as they start each other, drawn as a construction crew from apprentice to architect. Needs no other plugin. |
 
 Each works on its own, and they light up together: the flow drives the bar, workers report to the panel, and savvy-limits tells the flow which provider should take each task. Without savvy-limits or the Gemini CLI, all work stays on Claude.
 
