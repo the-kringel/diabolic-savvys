@@ -1,6 +1,6 @@
 {
   "name": "savvy-flow",
-  "version": "1.7.0",
+  "version": "1.7.1",
   "description": "Orchestrated delivery flow: the session model plans, owns design and reviews; tiered workers implement. Fully specified tasks go to Sonnet, work that needs judgment to Opus on medium effort, Opus on high only on a named trigger; Sonnet workers also fan out in parallel and a Sonnet tester checks the results. Pairs with savvy-progress, and with savvy-limits to route dedicated tracks to Gemini by Claude and Gemini capacity.",
   "author": {
     "name": "the-kringel",
