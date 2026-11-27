@@ -7,14 +7,14 @@
       "name": "savvy-flow",
       "source": "./plugins/savvy-flow",
       "description": "Skill: multi-model orchestration. Plan, delegate to tiered Claude workers (Sonnet for fully specified tasks, Opus medium for judgment, Sonnet tester), side sessions in the desktop app, or Gemini workers with savvy-limits; review.",
-      "version": "1.7.0",
+      "version": "1.7.1",
       "category": "skill"
     },
     {
       "name": "savvy-progress",
       "source": "./plugins/savvy-progress",
       "description": "Mod: progress bar above the prompt and a live agents panel where every worker, subagent or side session, is a Diablo 2 hero crab.",
-      "version": "1.7.0",
+      "version": "1.8.0",
       "category": "mod"
     },
     {

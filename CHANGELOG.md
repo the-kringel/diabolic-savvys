@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.10.0 — 2026-11-27
+
+### savvy-progress 1.8.0
+
+savvy-progress now stays out of the way outside a savvy-flow, so it can run next to [Site crew](https://github.com/the-kringel/Site-crew) without doubling up.
+
+- Side sessions are tracked only while a flow runs (a plan was reported or a savvy worker started, and the flow has not closed). Outside a flow, a side session gets no row, opens no panel and raises no notification here.
+- No more system-prompt section. A side session learns its parent from the desktop app (`get_session`'s `parentSessionId`) instead of a line the orchestrator had to append to every brief, so no desktop session gets extra prompt text anymore. Briefs that still end with the old line are read.
+- Only a session another one started writes a status file; other sessions write none.
+
+### savvy-flow 1.7.1
+
+- Section 4a no longer asks for the parent line in session briefs; it asks to report the plan with the progress tool before starting session tasks.
+
 ## 1.9.0 — 2026-11-27
 
 ### site-crew 0.1.0 (listed)

@@ -12,7 +12,9 @@ A Claude Code mod: a progress bar above the prompt and a live panel of subagents
 - **Time left and stalls**: a running worker shows an estimate of the time left (`~6 min left`) from its own pace over its reported steps, blended with how long its tier's last runs took (kept across sessions); a worker with no steps gets an estimate from its tier's history once it has three runs. A running worker with no sign of progress for over 10 minutes gets an orange `⚠ no progress for 12 min` line.
 - **Cost per session**: a side session reports what it has used, its own subagents included, so its row shows cost, tokens and context fill like a subagent's, and the panel's totals include it.
 
-How side sessions report: each desktop session writes its state to `~/.claude/savvy-progress/sessions/<session id>.json`, and the orchestrator reads the files that name it as parent every 2 seconds. The parent travels in one line at the end of each brief, `(savvy-progress: parent … key …)`: the mod's section of the system prompt asks the orchestrator to write it, so auto mode reviews the call as written and nothing rewrites it. The design is in [docs/SESSION-MODE.md](../../docs/SESSION-MODE.md).
+**Only with savvy-flow.** Side sessions show here, open the panel and raise notifications only while a savvy-flow runs; the bar appears only for a flow, and the panel opens by itself only for savvy workers (or any subagent with `autoOpen: any`). Outside a flow the mod adds nothing to the system prompt and stays out of the way. For a panel of every subagent and side session, flow or not, use [Site crew](https://github.com/the-kringel/Site-crew).
+
+How side sessions report: a session another one started asks the app who its parent is and writes its state to `~/.claude/savvy-progress/sessions/<session id>.json`; the orchestrator reads the files that name it as parent every 2 seconds while a flow runs. The design is in [docs/SESSION-MODE.md](../../docs/SESSION-MODE.md).
 
 ## Tools it adds
 

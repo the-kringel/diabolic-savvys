@@ -193,7 +193,7 @@ Both keep this conversation small: a subagent returns a summary, a session a sho
 - `prompt`: the brief (section 4 rules) plus these lines for the session:
   > You are a worker session started by an orchestrating session. Do this task yourself: do not start further sessions or delegate it. Report progress with `mcp__savvy-progress__step` if that tool exists. When done, end with a short report: what changed and where, the branch or PR, what you verified, what you left out. If you need a decision, end your turn with the question and the options; do not guess.
 
-With savvy-progress installed, your system prompt asks you to end each brief with a step-reporting paragraph and a parent line; write them as it says, so the panel can track the session.
+With savvy-progress installed, the panel finds a started session by itself while the flow runs: report the plan with the progress tool (Progress bar section) before starting session tasks.
 
 **Waves.** Keep at most **4 session tasks running** at once; start the next queued one when one finishes. Sessions and subagents can run side by side.
 

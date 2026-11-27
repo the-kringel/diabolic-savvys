@@ -1323,10 +1323,12 @@ async function syncApiWorkers($: EngineInterface): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
-// Side sessions (docs/SESSION-MODE.md). Every desktop session writes its own state
-// to a file named after its app id (`local_…`, from CLAUDE_CODE_HOST_SESSION_ID);
-// a session that started others with start_session reads theirs and draws them as
-// workers. One file per session, so concurrent writers never overwrite each other.
+// Side sessions (docs/SESSION-MODE.md). A desktop session that another session
+// started writes its own state to a file named after its app id (`local_…`, from
+// CLAUDE_CODE_HOST_SESSION_ID); the session that started it reads that file and draws
+// it as a worker, while a savvy-flow runs. One file per session, so concurrent writers
+// never overwrite each other. Outside a flow nothing here shows: no row, no panel, no
+// notification, and nothing is added to the system prompt.
 
 type SessionState = 'running' | 'waiting' | 'idle'
 
@@ -1342,9 +1344,11 @@ type SessionStatus = {
   costUsd?: number
   tokens?: number
   contextTokens?: number
-  /** The session that started this one, and the key its brief carried. */
+  /** The session that started this one (from the app, or an older brief's line), and that brief's key. */
   parentId?: string
   parentKey?: string
+  /** The session's own title, as the app names it: a session found by its file is drawn with it. */
+  title?: string
   updatedAt: number
 }
 
@@ -1352,15 +1356,10 @@ type SessionStatus = {
 type Brief = { title: string; model?: string; effort?: string }
 
 const START_TOOL = 'mcp__ccd_session__start_session'
-// Added to every brief this session sends: the side session reads its parent from it,
-// whether it starts now, from a card the person clicks, or from "start it".
+// A side session learns its parent from the app (`get_session`'s `parentSessionId`).
+// Briefs written by savvy-progress 1.7.0 and earlier ended with this line instead;
+// it is still read, so a session such a brief started finds its parent too.
 const PARENT_LINE = /\(savvy-progress: parent (local_[0-9a-f-]{36}) key ([a-z0-9]{4,16})\)/
-// The system prompt's instruction for briefs: written by the model, so the call that
-// auto mode reviews already holds the line.
-const sessionsSection = (): string =>
-  `# Side session briefs (savvy-progress)\n\nWhen you call \`${START_TOOL}\` with a \`prompt\`, end that prompt with these two parts, so the agents panel can track the session:\n` +
-  `1. This paragraph: "Progress reporting: before any other work, call \`${STEP_TOOL}\` with \`total\` (your plan in 3-8 steps) and \`done: 0\`; call it again with \`done\` and a few-word \`note\` as each step finishes."\n` +
-  `2. As the very last line, exactly: (savvy-progress: parent ${hostId} key <key>) — with <key> a new string of 4 to 16 lowercase letters and digits for each session (for example the task's title, shortened).`
 const HOST_ID = /local_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/
 // A running session rewrites its file at least this often, so a reader can tell it is alive.
 const HEARTBEAT_MS = 5 * 60 * 1000
@@ -1386,10 +1385,12 @@ async function relayFolder($: EngineInterface): Promise<string> {
 }
 
 // Writes this session's state when it changed, or for the heartbeat. A failed write
-// (a locked file on Windows) is retried by the next change.
+// (a locked file on Windows) is retried by the next change. Only a session another one
+// started writes: a session nobody started has nobody to tell.
 async function publish($: EngineInterface, state: SessionState, patch: Partial<typeof mine> = {}): Promise<void> {
   if (!hostId) return
   mine = { ...mine, ...patch, state, reason: state === 'waiting' ? patch.reason ?? mine.reason : undefined }
+  if (!mine.parentId) return
   const body = JSON.stringify(mine)
   // The state without usage: a change there is written at once, usage alone every 15 s.
   const stateBody = JSON.stringify({ ...mine, costUsd: undefined, tokens: undefined, contextTokens: undefined })
@@ -1440,14 +1441,23 @@ async function trackStarted($: EngineInterface, input: Record<string, unknown>, 
   await addSession($, id, { ...brief, title: brief.title || named || String(input.name ?? '') })
 }
 
+// A savvy-flow is running in this session: it reported a plan (or started a savvy
+// worker) and has not closed. Side sessions are tracked only then.
+async function isFlowRunning($: EngineInterface): Promise<boolean> {
+  const f = await read($, flow)
+  return f !== null && !f.isFinished
+}
+
 // The tier the plan gave a task of this title, if the flow planned one.
 async function plannedTier($: EngineInterface, title: string): Promise<string | undefined> {
   const f = await read($, flow)
   return f?.tasks?.find(t => norm(t.title) === norm(title))?.tier || undefined
 }
 
-// A side session becomes a worker row, its hero set by model and effort.
+// A side session becomes a worker row, its hero set by model and effort: only while a
+// flow runs, so a side session started outside savvy-flow opens no panel here.
 async function addSession($: EngineInterface, id: string, brief: Brief): Promise<void> {
+  if (!(await isFlowRunning($))) return
   if ((await read($, agents)).some(a => a.id === id)) return
   const model = brief.model || (await $.session.model().catch(() => 'opus'))
   const effort = brief.effort
@@ -1479,6 +1489,21 @@ async function addSession($: EngineInterface, id: string, brief: Brief): Promise
   await autoOpen($, f && !f.isFinished ? f.title : 'savvy-flow')
 }
 
+// This session as the desktop app describes it: the session that started it (none once
+// it was moved to the top level) and its title. Empty outside the app.
+async function selfSession($: EngineInterface): Promise<{ parentSessionId?: string; title?: string }> {
+  try {
+    const r = await $.mcp.call('ccd_session_mgmt', 'get_session', { session_id: 'self' })
+    if (r.isError) return {}
+    const text = r.content.map(b => (b as { text?: string }).text ?? '').join('')
+    const s = JSON.parse(text) as { parentSessionId?: unknown; title?: unknown; detached?: unknown }
+    const parent = typeof s.parentSessionId === 'string' && HOST_ID.test(s.parentSessionId) && s.detached !== true ? s.parentSessionId : undefined
+    return { parentSessionId: parent, title: typeof s.title === 'string' ? s.title : undefined }
+  } catch {
+    return {}
+  }
+}
+
 // Shows a side session in the app, as clicking its row in the sidebar would. A panel
 // link cannot: the desktop draws only https links. The app's window tool can, for a
 // session this one started; where it refuses, a toast says where to find it.
@@ -1495,9 +1520,10 @@ async function openSession($: EngineInterface, id: string): Promise<void> {
 }
 
 // Finds side sessions that name this one as their parent, however they were started
-// (a card the person clicked never passes through start_session here).
+// (a card the person clicked never passes through start_session here). Only while a
+// flow runs: a file left unread until then is read once the flow starts.
 async function discoverSessions($: EngineInterface): Promise<void> {
-  if (!hostId) return
+  if (!hostId || !(await isFlowRunning($))) return
   const dir = await relayFolder($)
   const known = new Set((await read($, agents)).map(a => a.id))
   const entries = await $.fs.list(dir).catch(() => [])
@@ -1515,7 +1541,7 @@ async function discoverSessions($: EngineInterface): Promise<void> {
     }
     if (w.parentId !== hostId) continue
     const brief = (w.parentKey ? ((await $.store.get(`brief:${w.parentKey}`)) as Brief | undefined) : undefined) ?? { title: '' }
-    await addSession($, id, { ...brief, model: brief.model || w.model })
+    await addSession($, id, { ...brief, title: brief.title || (typeof w.title === 'string' ? w.title : ''), model: brief.model || w.model })
   }
 }
 
@@ -1577,7 +1603,13 @@ export const register: Register = (on, options) => {
     hostId = (await $.env.get('CLAUDE_CODE_HOST_SESSION_ID')) ?? ''
     const kept = await $.store.get('durations').catch(() => undefined)
     if (kept && typeof kept === 'object') durations = kept as Durations
-    if (hostId) await publish($, 'idle', { model: await $.session.model().catch(() => undefined) })
+    if (hostId) {
+      // A session another one started learns its parent from the app, however it was
+      // started (a call, a card the person clicked, "start it"), and tells it from then on.
+      const self = await selfSession($)
+      if (self.parentSessionId) mine = { ...mine, parentId: self.parentSessionId, title: self.title }
+      await publish($, 'idle', { model: await $.session.model().catch(() => undefined) })
+    }
     await $.tool.register({
       name: 'progress',
       description:
@@ -1770,28 +1802,19 @@ export const register: Register = (on, options) => {
     return next(e)
   })
 
-  // Sessions this one starts become workers in the panel.
+  // Sessions this one starts during a flow become workers in the panel. The call is
+  // never rewritten: auto mode reviews it as the model wrote it, and a rewrite after that
+  // review is refused. A brief that still ends with an old parent line keeps its key.
   on('tool.call', { tool: START_TOOL }, async ($, e, next) => {
     const input = e as unknown as Record<string, unknown>
-    if (e.agentId || !hostId) return next(e)
+    if (e.agentId || !hostId || !(await isFlowRunning($))) return next(e)
     const str = (v: unknown): string | undefined => (typeof v === 'string' && v.trim() ? v.trim() : undefined)
     const brief: Brief = { title: str(input.title) ?? '', model: str(input.model), effort: str(input.effort) }
-    // The call is never rewritten: auto mode reviews it as the model wrote it, and a
-    // rewrite after that review is refused. The model ends the brief with the parent
-    // line (the system prompt asks it to, see prompt.compose); here its key is kept.
     const line = PARENT_LINE.exec(str(input.prompt) ?? '')
     if (line && line[1] === hostId) await $.store.set(`brief:${line[2]}`, brief)
     const result = await next(e)
     await trackStarted($, input, result, brief)
     return result
-  })
-
-  // Asks the model to end every session brief with the parent line, so a side session
-  // can name this one as its parent however it starts (a card the person clicks too).
-  on('prompt.compose', async ($, e, next) => {
-    const composed = await next(e)
-    if (!hostId) return composed
-    return { sections: [...composed.sections, { id: 'savvy-progress:sessions', text: sessionsSection(), scope: 'session' as const }] }
   })
 
   // Safety net: worker launches move the faint layer even if the orchestrator forgets to report.

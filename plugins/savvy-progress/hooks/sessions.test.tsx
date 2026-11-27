@@ -2,17 +2,21 @@ import type { On } from 'claude-code'
 import { expect, mock, test } from 'claude-code/testing'
 import type { Engine } from 'claude-code/testing'
 
-// Side sessions (docs/SESSION-MODE.md): each session writes its state to a file of its
-// own; the session that started it reads that file and draws it as a worker.
+// Side sessions (docs/SESSION-MODE.md): a session another one started writes its state
+// to a file of its own; the session that started it reads that file and draws it as a
+// worker, while a savvy-flow runs. Outside a flow the panel stays out of the way.
 
 const PLUGIN = 'savvy-progress'
 const CHILD = 'local_014da006-e133-4607-9a12-362cd1d5cd65'
+const PARENT = 'local_b9f6dc8a-d0ab-4fdd-a609-846bff1ef252'
 const DIR = 'C:/Users/me/.claude/savvy-progress/sessions'
 const pane = { title: '', isFocused: false, bodyColumns: 80, placement: 'dock', scroll: { offset: 0, bodyRows: 40 }, view: {} } as const
 
 type Status = { hostId: string; state: string; reason?: string; stepDone?: number; stepTotal?: number; updatedAt: number }
 
 let kept = new Map<string, unknown>()
+// Every pane the plugin opened, by id.
+let opened: string[] = []
 
 const base = (on: On, env: Record<string, string>, store: Record<string, unknown> = {}) => {
   const clock = mock.clock(on, { now: Date.parse('2026-11-11T12:00:00Z') })
@@ -20,7 +24,11 @@ const base = (on: On, env: Record<string, string>, store: Record<string, unknown
   on('settings.read', async () => ({ value: {} }) as never)
   on('session.start', async () => ({ cwd: '/repo' }) as never)
   on('session.model', async () => ({ value: 'claude-opus-5-5' }) as never)
-  on('ui.open', async () => ({ value: { isPlaced: true } }) as never)
+  opened = []
+  on('ui.open', async (_$, e) => {
+    opened.push(String((e as unknown as { id: string }).id))
+    return { value: { isPlaced: true } } as never
+  })
   // The plugin's store, in memory, readable by the test.
   kept = new Map(Object.entries(store))
   on('store.get', async (_$, e) => ({ value: kept.get((e as unknown as { key: string }).key) }) as never)
@@ -42,9 +50,19 @@ const base = (on: On, env: Record<string, string>, store: Record<string, unknown
 
 const start = ($: Engine) => $.session.start({ source: 'startup', cwd: '/repo', surface: 'terminal', isInteractive: true } as never)
 
-// The side session: what it writes to its own file as it works.
-async function child($: Engine, on: On) {
+// A savvy-flow reports its plan: from here on this session tracks the sessions it starts.
+const startFlow = ($: Engine, tasks: { title: string; tier: string }[] = []) =>
+  $.tool.call({ tool: 'mcp__savvy-progress__progress', title: 'Ring IV', phase: 'delegate', ...(tasks.length ? { tasks } : {}) } as never)
+
+// The app's answer to get_session for `self`: who started this session, if anyone.
+const selfReply = (parentSessionId?: string) =>
+  ({ value: { content: [{ type: 'text', text: JSON.stringify({ sessionId: CHILD, title: 'Ring IV balance', ...(parentSessionId ? { parentSessionId } : {}) }) }], isError: false } }) as never
+
+// The side session: what it writes to its own file as it works. `startedBy` is the
+// parent the app reports; null for a session the app knows no parent of.
+async function child($: Engine, on: On, startedBy: string | null = PARENT) {
   base(on, { CLAUDE_CODE_HOST_SESSION_ID: CHILD })
+  on('mcp.call', async () => selfReply(startedBy ?? undefined))
   const files = new Map<string, Status>()
   on('fs.write', async (_$, e) => {
     const { path, text } = e as unknown as { path: string; text: string }
@@ -62,7 +80,8 @@ async function child($: Engine, on: On) {
 
 test('a side session publishes running, a raised hand for a permission dialog, and idle', async ($, on) => {
   const status = await child($, on)
-  expect(status()?.state).toBe('idle')
+  // The app named its parent: it says so from the start, with its own title.
+  expect(status()).toMatchObject({ state: 'idle', parentId: PARENT, title: 'Ring IV balance' })
 
   await $.turn.start({ turnId: 't1', text: 'go' } as never)
   expect(status()?.state).toBe('running')
@@ -98,6 +117,66 @@ test('a session outside the desktop app writes no status file', async ($, on) =>
   expect(writes).toBe(0)
 })
 
+test('a session nobody started writes no status file', async ($, on) => {
+  const status = await child($, on, null)
+  await $.turn.start({ turnId: 't1', text: 'go' } as never)
+  await $.classic.PermissionRequest({ tool_name: 'Bash', tool_input: { command: 'ls' } } as never)
+  expect(status()).toBeUndefined()
+})
+
+// Outside a flow, a side session this session starts gets no row, opens no panel and
+// raises no notification: Site crew or the app shows it.
+test('outside a flow a started side session is not tracked and opens no panel', async ($, on) => {
+  const clock = base(on, { CLAUDE_CODE_HOST_SESSION_ID: PARENT })
+  on('fs.write', async () => ({ value: undefined }) as never)
+  const waiting = { hostId: CHILD, state: 'waiting', reason: 'Bash: npm publish', parentId: PARENT, title: 'Ring IV balance', updatedAt: 1 }
+  on('fs.list', async () => ({ value: [{ name: `${CHILD}.json`, kind: 'file', size: 1, mtimeMs: 5, isLink: false }] }) as never)
+  on('fs.stat', async () => ({ value: { kind: 'file', size: 1, mtimeMs: 5, isLink: false } }) as never)
+  on('fs.read', async () => ({ value: JSON.stringify(waiting) }) as never)
+  on('fs.exists', async () => ({ value: false }) as never)
+  const notified: string[] = []
+  on('ui.notify', async (_$, e) => {
+    notified.push((e as unknown as { text: string }).text)
+    return { value: {} } as never
+  })
+  on('tool.call', async () => ({ result: `Started session "Ring IV balance" (session_id: ${CHILD}, name: r4-bal).` }) as never)
+  await start($)
+  await $.tool.call({ tool: 'mcp__ccd_session__start_session', initiation: 'user_asked', title: 'Ring IV balance', model: 'claude-sonnet-5-5', prompt: 'p' } as never)
+  await clock.advance(4200)
+
+  const ui = await $.ui.mount({ plugin: PLUGIN, surface: 'terminal', component: 'Pane', requestId: 'savvy-agents', props: pane })
+  expect(await ui.find({ key: `title-${CHILD}` })).toBeUndefined()
+  await ui.unmount()
+  expect(opened).toEqual([])
+  expect(notified).toEqual([])
+})
+
+test('nothing is added to the system prompt, and a start_session call is never rewritten', async ($, on) => {
+  base(on, { CLAUDE_CODE_HOST_SESSION_ID: PARENT })
+  on('fs.write', async () => ({ value: undefined }) as never)
+  on('fs.stat', async () => {
+    throw new Error('ENOENT')
+  })
+  on('prompt.compose', async () => ({ sections: [{ id: 'intro', text: 'You are Claude.', scope: 'shared' }] }) as never)
+  const sent: string[] = []
+  on('tool.call', async (_$, e) => {
+    sent.push(String((e as unknown as { prompt?: string }).prompt ?? ''))
+    return { result: 'Proposed as task_1 (a card the user can start).' } as never
+  })
+  await start($)
+  await startFlow($)
+
+  const composed = await $.prompt.compose({ model: 'claude-opus-5-5', promptModel: 'claude-opus-5-5', surfaces: ['desktop'], tools: [], outputStyle: null, traits: [] } as never)
+  expect(composed.sections.map(x => x.id)).toEqual(['intro'])
+
+  // Auto mode reviews the call as written: it reaches the engine unchanged. A brief that
+  // still ends with an old parent line keeps its key for that session to be named by.
+  const prompt = `Balance ring IV.\n\n(savvy-progress: parent ${PARENT} key ring4bal)`
+  await $.tool.call({ tool: 'mcp__ccd_session__start_session', initiation: 'own_initiative', title: 'Ring IV balance', model: 'claude-sonnet-5-5', prompt } as never)
+  expect(sent).toEqual([prompt])
+  expect(kept.get('brief:ring4bal')).toEqual({ title: 'Ring IV balance', model: 'claude-sonnet-5-5' })
+})
+
 // The orchestrator: a started session becomes a worker with its hero, label and link,
 // and its file raises the hand.
 test('a started session is a worker; its waiting file raises the hand in the panel', async ($, on) => {
@@ -114,6 +193,7 @@ test('a started session is a worker; its waiting file raises the hand in the pan
   })
   on('tool.call', async () => ({ result: `Started session "Ring IV balance" (session_id: ${CHILD}, name: r4-bal).` }) as never)
   await start($)
+  await startFlow($)
 
   await $.tool.call({
     tool: 'mcp__ccd_session__start_session',
@@ -145,6 +225,7 @@ test('a proposal started by its id takes its title from the result', async ($, o
   })
   on('tool.call', async () => ({ result: `Started session "Hand test: one permission prompt" (session_id: ${CHILD}, name: hand-test).` }) as never)
   await start($)
+  await startFlow($)
   await $.tool.call({ tool: 'mcp__ccd_session__start_session', proposal_id: 'task_6713f11a' } as never)
 
   const ui = await $.ui.mount({ plugin: PLUGIN, surface: 'terminal', component: 'Pane', requestId: 'savvy-agents', props: pane })
@@ -152,38 +233,8 @@ test('a proposal started by its id takes its title from the result', async ($, o
   await ui.unmount()
 })
 
-const PARENT = 'local_b9f6dc8a-d0ab-4fdd-a609-846bff1ef252'
-
-test('the orchestrator is asked to end each brief with its parent line, and the call is never rewritten', async ($, on) => {
-  base(on, { CLAUDE_CODE_HOST_SESSION_ID: PARENT })
-  on('fs.write', async () => ({ value: undefined }) as never)
-  on('fs.stat', async () => {
-    throw new Error('ENOENT')
-  })
-  on('prompt.compose', async () => ({ sections: [{ id: 'intro', text: 'You are Claude.', scope: 'shared' }] }) as never)
-  const sent: string[] = []
-  on('tool.call', async (_$, e) => {
-    sent.push(String((e as unknown as { prompt?: string }).prompt ?? ''))
-    return { result: 'Proposed as task_1 (a card the user can start).' } as never
-  })
-  await start($)
-
-  const composed = await $.prompt.compose({ model: 'claude-opus-5-5', promptModel: 'claude-opus-5-5', surfaces: ['desktop'], tools: [], outputStyle: null, traits: [] } as never)
-  const section = composed.sections.find(x => x.id === 'savvy-progress:sessions')
-  expect(section?.scope).toBe('session')
-  expect(section?.text).toContain(`(savvy-progress: parent ${PARENT} key <key>)`)
-  expect(section?.text).toContain('mcp__savvy-progress__step')
-
-  // Auto mode reviews the call as written: it reaches the engine unchanged, and the
-  // brief's key is kept for the card's session to be named by.
-  const prompt = `Balance ring IV.\n\n(savvy-progress: parent ${PARENT} key ring4bal)`
-  await $.tool.call({ tool: 'mcp__ccd_session__start_session', initiation: 'own_initiative', title: 'Ring IV balance', model: 'claude-sonnet-5-5', prompt } as never)
-  expect(sent).toEqual([prompt])
-  expect(kept.get('brief:ring4bal')).toEqual({ title: 'Ring IV balance', model: 'claude-sonnet-5-5' })
-})
-
-test('a side session reads its parent from the brief on its first turn', async ($, on) => {
-  const status = await child($, on)
+test('a side session started by an older brief reads its parent from the brief on its first turn', async ($, on) => {
+  const status = await child($, on, null)
   await $.turn.start({ turnId: 't1', text: `Background ...
 Task: go
 
@@ -201,6 +252,7 @@ test('a session started from a card is found by its parent and named from the ke
   on('fs.exists', async () => ({ value: false }) as never)
   on('ui.notify', async () => ({ value: {} }) as never)
   await start($)
+  await startFlow($)
 
   await clock.advance(2100)
   const ui = await $.ui.mount({ plugin: PLUGIN, surface: 'terminal', component: 'Pane', requestId: 'savvy-agents', props: pane })
@@ -209,6 +261,24 @@ test('a session started from a card is found by its parent and named from the ke
   expect(await ui.find({ type: 'Text', text: /needs you: Bash: node -e/ })).toBeTruthy()
   // Its usage, from its own file: cost and tokens on its row.
   expect(await ui.find({ type: 'Text', text: /≈\$1\.50/ })).toBeTruthy()
+  await ui.unmount()
+})
+
+test('during a flow a session found by its file is named by the title the app gave it', async ($, on) => {
+  const clock = base(on, { CLAUDE_CODE_HOST_SESSION_ID: PARENT })
+  on('fs.write', async () => ({ value: undefined }) as never)
+  const file = { hostId: CHILD, state: 'running', parentId: PARENT, title: 'Ring IV balance', model: 'claude-opus-5-5', updatedAt: Date.parse('2026-11-11T12:00:03Z') }
+  on('fs.list', async () => ({ value: [{ name: `${CHILD}.json`, kind: 'file', size: 1, mtimeMs: 5, isLink: false }] }) as never)
+  on('fs.stat', async () => ({ value: { kind: 'file', size: 1, mtimeMs: 5, isLink: false } }) as never)
+  on('fs.read', async () => ({ value: JSON.stringify(file) }) as never)
+  on('fs.exists', async () => ({ value: false }) as never)
+  on('ui.notify', async () => ({ value: {} }) as never)
+  await start($)
+  await startFlow($)
+
+  await clock.advance(2100)
+  const ui = await $.ui.mount({ plugin: PLUGIN, surface: 'terminal', component: 'Pane', requestId: 'savvy-agents', props: pane })
+  expect((await ui.find({ key: `title-${CHILD}` }))?.props.label).toBe('Ring IV balance')
   await ui.unmount()
 })
 
@@ -222,9 +292,9 @@ for (const surface of ['terminal', 'desktop'] as const) {
     })
     on('agent.spawn', () => ({ model: 'claude-opus-5-5', agentId: 'a7' }) as never)
     on('tool.call', async () => ({ result: `Started session "Ring IV balance" (session_id: ${CHILD}, name: r4).` }) as never)
-    const opened: unknown[] = []
+    const windowCalls: unknown[] = []
     on('mcp.call', async (_$, e) => {
-      opened.push(e)
+      if ((e as unknown as { server: string }).server === 'ccd_window') windowCalls.push(e)
       return { value: { content: [{ type: 'text', text: 'Opened' }], isError: false } } as never
     })
     const viewed: unknown[] = []
@@ -233,12 +303,13 @@ for (const surface of ['terminal', 'desktop'] as const) {
       return { value: {} } as never
     })
     await start($)
+    await startFlow($)
     await $.agent.spawn({ tool_use_id: 't1', prompt: 'p', description: 'Fix the parser', subagentType: 'savvy-medium', provider: 'engine', parentModel: 'claude-opus-5-5', background: true, fork: false } as never)
     await $.tool.call({ tool: 'mcp__ccd_session__start_session', initiation: 'user_asked', title: 'Ring IV balance', prompt: 'p' } as never)
 
     const ui = await $.ui.mount({ plugin: PLUGIN, surface, component: 'Pane', requestId: 'savvy-agents', props: pane })
     await ui.press({ key: `title-${CHILD}` })
-    expect(opened).toMatchObject([{ server: 'ccd_window', tool: 'open_session_in', args: { session_id: CHILD, target: 'focus' } }])
+    expect(windowCalls).toMatchObject([{ server: 'ccd_window', tool: 'open_session_in', args: { session_id: CHILD, target: 'focus' } }])
     await ui.press({ key: 'title-a7' })
     expect(viewed).toEqual([{ agentId: 'a7' }])
     await ui.unmount()
