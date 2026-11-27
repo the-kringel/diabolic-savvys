@@ -2,8 +2,9 @@
 
 A Claude Code mod that tracks your Claude Code and Gemini (Antigravity) 5-hour and weekly limits, tells the [savvy-flow](../savvy-flow) orchestrator how to split work between them, and runs Gemini workers.
 
-- **Telemetry band**: 5-hour and weekly meters for both providers above the prompt, with a status badge and reset countdowns. The terminal gets a one-line version.
-- **`/limits`**: pace, reset times and the provider for each work track. `/limits refresh` re-reads Gemini now, and `/limits hide` or `/limits show` toggles the row.
+The label that used to show the limits above the prompt is parked in its own repository, [savvy-limits-band](https://github.com/the-kringel/savvy-limits-band).
+
+- **`/limits`**: pace, reset times and the provider for each work track. `/limits refresh` re-reads Gemini now.
 - **`mcp__savvy-limits__limits`**: the same data for the orchestrator.
 - **Gemini workers**: `bin/gemini-worker.mjs` checks quota, picks a model by track and size, runs `agy` in its own git worktree (or an existing `--worktree` / `--in-place` checkout), optionally grants scoped build/test/commit commands and extra paths from a per-project profile (`.savvy/gemini.json`), supports `resume <run-id>` to continue the same `agy` conversation, logs every streaming event, and reports to the savvy-progress panel. The `savvy-gemini` skill uses it outside the flow.
 - **Gemini images**: `bin/gemini-image.mjs` makes images from a prompt, with optional reference images, through Antigravity's image generator on a cheap driver model, without a worktree. It retries Gemini capacity outages and can fall back to a gpt-image skill. It uses only Node built-ins, so it can also be copied into `~/.claude/skills` as a standalone skill.

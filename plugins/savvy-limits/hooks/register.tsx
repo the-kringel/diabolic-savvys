@@ -1,7 +1,6 @@
-import { atom, read, update } from 'claude-code'
+import { atom, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
-import { bandAlt, bandHeight, bandSvg } from '../lib/band.mjs'
 import { buildReport, parseGeminiUsage } from '../lib/capacity.mjs'
 import type { GeminiReading, PaceView, RateLimit, Report, WindowView } from '../types'
 
@@ -12,12 +11,6 @@ const TICK_MS = 60_000
 const ACTIVE_MS = 30 * 60_000
 
 const report = atom({ plugin: 'savvy-limits', key: 'report' } as const, null)
-const isHidden = atom({ plugin: 'savvy-limits', key: 'isHidden' } as const, false)
-
-const GOOD = '#2F9E6E'
-const WARN = '#C98A1B'
-const BAD = '#D14B3D'
-const MODE_WORD: Record<string, string> = { conserve: 'low', surplus: 'use first', blocked: 'blocked', unknown: 'no data' }
 
 let rateLimits: readonly RateLimit[] = []
 let gemini: GeminiReading | null = null
@@ -25,18 +18,7 @@ let refreshing: Promise<void> | null = null
 let activeAt = 0
 let pollMs: number | null = 5 * 60_000
 
-const levelColor = (w: WindowView | null): string | undefined => {
-  if (!w) return undefined
-  if (w.isDisabled || w.remainingPct <= 5) return BAD
-  return w.remainingPct < 20 ? WARN : GOOD
-}
-
 const pct = (w: WindowView | null): string => (!w ? '–' : w.isDisabled ? 'off' : `${Math.round(w.remainingPct)}%`)
-
-const meterText = (w: WindowView | null): string => {
-  const on = w && !w.isDisabled ? Math.round((w.remainingPct / 100) * 8) : 0
-  return '▰'.repeat(on) + '▱'.repeat(8 - on)
-}
 
 const resetIn = (iso: string | null | undefined, now: number): string => {
   if (!iso) return 'not started'
@@ -128,7 +110,7 @@ export const register: Register = (on, options) => {
     })
     await $.command.register({
       name: 'limits',
-      description: 'Show Claude and Gemini 5-hour and weekly limits. Arguments: refresh, hide, show',
+      description: 'Show Claude and Gemini 5-hour and weekly limits. Argument: refresh',
     })
     await publish($)
     void refreshGemini($).catch(() => undefined)
@@ -168,64 +150,9 @@ export const register: Register = (on, options) => {
 
   on('command.run', { command: 'limits' }, async ($, e) => {
     const arg = (e.args ?? '').trim().toLowerCase()
-    if (arg === 'hide' || arg === 'show') {
-      await update($, isHidden, () => arg === 'hide')
-      return { text: arg === 'hide' ? 'Limits row hidden.' : 'Limits row shown.' }
-    }
     await readClaude($)
     await refreshGemini($, arg === 'refresh')
     const current = await publish($)
     return { text: describe(current, await $.clock.now()) }
-  })
-
-  on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
-    const r = await read($, report)
-    if (!r || e.props.hasSurvey || (await read($, isHidden))) return next(e)
-    // Keep other mods' bands beneath this one. Claude Code's own placeholder is never
-    // nested: the desktop drops a band that nests it.
-    const drawn = await Promise.resolve(next(e)).catch(() => null)
-    const below = drawn && typeof drawn === 'object' && (drawn as { type?: string }).type !== 'engine' ? drawn : null
-    const ui = $.ui.resolve(e)
-    const { Box, Text } = ui
-
-    // The terminal's element table has an `Svg` that draws nothing: test the surface too.
-    if (e.surface !== 'terminal' && 'Svg' in ui) {
-      const { Svg } = ui
-      const width = Math.max(260, Math.min(1400, (e.props.bodyColumns || 100) * 8 - 32))
-      return (
-        <Box flexDirection="column" gap={1}>
-          <Svg source={bandSvg(r, width)} alt={bandAlt(r)} width={width} height={bandHeight(width)} />
-          {below}
-        </Box>
-      )
-    }
-
-    const provider = (name: string, p: PaceView) => {
-      const word = MODE_WORD[p.mode]
-      return (
-        <Box key={name} flexDirection="row" marginRight={2}>
-          <Text bold>{name} </Text>
-          <Text dimColor>5h </Text>
-          <Text color={levelColor(p.fiveHour)}>{meterText(p.fiveHour)} {pct(p.fiveHour)}</Text>
-          <Text dimColor> · wk </Text>
-          <Text color={levelColor(p.weekly)}>{meterText(p.weekly)} {pct(p.weekly)}</Text>
-          {word ? (
-            <Text color={p.mode === 'blocked' ? BAD : p.mode === 'conserve' ? WARN : undefined} dimColor={p.mode === 'unknown'}>
-              {' '}
-              {word}
-            </Text>
-          ) : null}
-        </Box>
-      )
-    }
-    return (
-      <Box flexDirection="column">
-        <Box flexDirection="row">
-          {provider('Claude', r.claude)}
-          {provider('Gemini', r.gemini)}
-        </Box>
-        {below}
-      </Box>
-    )
   })
 }

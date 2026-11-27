@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.11.0 — 2026-11-27
+
+### savvy-limits 0.4.0
+
+- The limits label above the prompt is gone. It is parked, together with the quota dashboard prototype, in its own repository, [savvy-limits-band](https://github.com/the-kringel/savvy-limits-band), until it is needed again.
+- `/limits hide` and `/limits show` went with it. `/limits`, `/limits refresh`, the `limits` tool and the Gemini workers are unchanged.
+
 ## 1.10.0 — 2026-11-27
 
 ### savvy-progress 1.8.0
