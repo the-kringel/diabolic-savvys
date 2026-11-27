@@ -9,24 +9,27 @@ An orchestrated delivery flow for Claude Code. Run `/savvy-flow <task>` (`/savvy
 
   | Agent | Hero | Model / effort | For |
   | --- | --- | --- | --- |
-  | `savvy-medium` | Barbarian | Opus / medium | **default**: standard feature work, bugs with a known cause |
-  | `savvy-careful` | Paladin | Opus / high | **normal ceiling**: delicate changes, unclear bugs, investigations |
+  | `savvy-medium` | Barbarian | Opus / medium | **default** for work that needs judgment: standard features, bugs with a known cause |
+  | `savvy-careful` | Paladin | Opus / high | **only on a named trigger**: cross-file invariants, concurrency, multi-module refactors, security or data-loss risk, unclear bugs |
   | `savvy-light` | Assassin | Opus / low | mechanical edits, config, builds, tests |
-  | `savvy-swarm` | Desert Mercenary | Sonnet / medium | narrow, fully specified tasks in parallel waves |
+  | `savvy-swarm` | Desert Mercenary | Sonnet / medium | **default** for fully specified tasks, alone or in parallel waves |
   | `savvy-tester` | Deckard Cain | Sonnet / high | independent testing of another worker's change |
   | `savvy-heavy` | Druid | Opus / xhigh | exception: after Careful failed, or on request |
   | `savvy-fable` | Sorceress | Fable / high | exception: after Heavy failed, or on request; design features on request |
 
 ## How the orchestrator picks a tier
 
-- No clear reason to go lower or higher → **Medium**.
-- Unsure between Medium and Careful → Careful. Never go above Careful just because of uncertainty.
-- Bugs: known cause → Medium; unclear cause or delicate fix → Careful.
-- A task that fails review twice moves **one tier up**: Medium → Careful → Heavy → Fable.
+- The brief can be written in full (exact files, behaviour, edge cases, the check that proves it done) → **Swarm** (Sonnet). Otherwise → **Medium**.
+- **Careful** only on a trigger the plan names: an invariant across files or releases, concurrency or ordering, a multi-module refactor, security or data-loss risk, or a bug whose cause is unclear. Unsure and no trigger → Medium: one return round costs less than running everything at high effort.
+- Bugs: known cause → Swarm or Medium; unclear cause → Careful investigates and writes a brief, then Swarm or Medium implements it.
+- A task that fails review twice moves **one tier up**: Swarm → Medium → Careful → Heavy → Fable.
+- The orchestrator's own model sets the lane. On Fable, Opus and Sonnet workers are cheaper per token. On Opus, an Opus worker costs the same as the orchestrator, so delegation buys parallel work and a clean context rather than a cheaper rate, and Fable workers run only on request.
+
+Why: a worker's cost is mostly turns times context, not price per token. In measured runs a Careful task cost about 2.5× a Medium one, and Heavy or Fable about 4.5×.
 
 ## Swarming
 
-When a feature splits into many small, independent pieces, the orchestrator settles the shared parts first (interfaces, types, config), then sends `savvy-swarm` workers out in one wave of about 3–8, each with its own files and an exact definition of done. Testers can swarm the same way, one per area. Each wave is reviewed before the next starts, and the full build and test suite runs once after it.
+A single fully specified task goes to `savvy-swarm` on its own. When a feature splits into many small, independent pieces, the orchestrator settles the shared parts first (interfaces, types, config), then sends `savvy-swarm` workers out in one wave of about 3–8, each with its own files and an exact definition of done. Testers can swarm the same way, one per area. Each wave is reviewed before the next starts, and the full build and test suite runs once after it.
 
 ## Testing
 

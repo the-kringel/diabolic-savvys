@@ -2,7 +2,7 @@
 
 **Multi-model orchestration for [Claude Code](https://claude.com/claude-code).** Claude plans the work, owns the design and reviews every result, while workers run on Claude (Fable, Opus, Sonnet) or Gemini (Hydrogen, Neon, Argon), chosen by the task and by how much quota each provider has left.
 
-You can watch them work: Claude workers are Diablo 2 heroes, tuned to spend most of their time on Opus at medium effort, Gemini Neon workers are 90s ravers, Hydrogen workers are a water crew, and Argon workers are scientists.
+You can watch them work: Claude workers are Diablo 2 heroes, tuned to spend most of their time on Sonnet and on Opus at medium effort, Gemini Neon workers are 90s ravers, Hydrogen workers are a water crew, and Argon workers are scientists.
 
 ![The lineup: Sorceress, Druid, Paladin, Barbarian, Assassin, Desert Mercenary, Deckard Cain, Amazon and Necromancer crabs](docs/lineup.svg)
 
@@ -60,10 +60,10 @@ Claude cannot generate images or read video or audio, so that work waits for Gem
 
 | Hero | Agent | Model / effort | Role |
 | --- | --- | --- | --- |
-| Barbarian | `savvy-medium` | Opus / medium | **Default.** Standard features, bugs with a known cause. |
-| Paladin | `savvy-careful` | Opus / high | **Normal ceiling.** Delicate changes, unclear bugs, investigations. |
+| Barbarian | `savvy-medium` | Opus / medium | **Default for judgment.** Standard features, bugs with a known cause. |
+| Paladin | `savvy-careful` | Opus / high | **Only on a named trigger.** Cross-file invariants, concurrency, multi-module refactors, unclear bugs. |
 | Assassin | `savvy-light` | Opus / low | Mechanical edits, config, running builds and tests. |
-| Desert Mercenary | `savvy-swarm` | Sonnet / medium | Narrow, fully specified tasks, fanned out in parallel waves. |
+| Desert Mercenary | `savvy-swarm` | Sonnet / medium | **Default for fully specified tasks**, alone or in parallel waves. |
 | Deckard Cain | `savvy-tester` | Sonnet / high | Independently tests what other workers built. Never fixes code. |
 | Druid | `savvy-heavy` | Opus / xhigh | Exception: only after Careful failed, or when you ask. |
 | Sorceress | `savvy-fable` | Fable / high | Exception: only after Heavy failed, or when you ask. |
@@ -170,8 +170,8 @@ The mods are built on function hooks (`hooks/register.tsx`), an early-access Cla
 Based on claude-kit `savvy-flow` 1.2.0 and `savvy-progress` 1.2.1. Details per release are in [CHANGELOG.md](CHANGELOG.md).
 
 - **Multi-model routing.** The new `savvy-limits` plugin tracks Claude and Gemini quota and sends each task to the right provider, with Gemini workers running through the official `agy` CLI.
-- **Tiering leans on Opus / medium.** Medium is the default tier, Careful (Opus / high) the normal ceiling including for bugs. Heavy (xhigh) and Fable are exception tiers, used only after a failure one tier below or on request. Escalation goes one tier at a time.
-- **`savvy-swarm`** (Sonnet): narrow coding tasks fanned out in parallel waves of about 3–8 workers, each on its own files, reviewed by the orchestrator after every wave.
+- **Tiering leans low.** Fully specified tasks go to Sonnet (`savvy-swarm`), work that needs judgment to Opus / medium. Careful (Opus / high) runs only on a trigger the plan names. Heavy (xhigh) and Fable are exception tiers, used only after a failure one tier below or on request. Escalation goes one tier at a time, and the orchestrator's own model decides whether delegation can save on price at all.
+- **`savvy-swarm`** (Sonnet): fully specified coding tasks, alone or in parallel waves of about 3–8 workers, each on its own files, reviewed by the orchestrator after every wave.
 - **`savvy-tester`** (Sonnet): tests a change independently after the worker that wrote it returns; its failures become the defect list.
 - **New heroes** in the panel: the Desert Mercenary (spear thrusts), Deckard Cain (cane taps, Identify scroll glows) and eleven Gemini heroes: the Neon ravers, the Hydrogen water crew and the Argon lab.
 

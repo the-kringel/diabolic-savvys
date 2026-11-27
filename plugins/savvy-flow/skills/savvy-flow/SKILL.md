@@ -13,7 +13,7 @@ Task from the user: $ARGUMENTS
 
 ## 0. Preconditions
 
-- The flow is designed for a strong orchestrator model at high effort (Fable high is the reference setup). Do not try to detect or verify the session's model or effort — you cannot see the effort level. Whatever the session runs on is the user's deliberate choice; just orchestrate.
+- The flow is designed for a strong orchestrator model at high effort. Your system prompt names the model you run on; you cannot see your effort level. Whatever the session runs on is the user's deliberate choice: never ask to change it, but let the model set the lane in section 3.
 - Worker agents must exist: `savvy-fable`, `savvy-heavy`, `savvy-careful`, `savvy-medium`, `savvy-light`, `savvy-swarm`, `savvy-tester` (in `~/.claude/agents/`, or shipped with the savvy-flow plugin, in which case the Agent tool lists them as `savvy-flow:savvy-careful` and so on). If the Agent tool does not list them, stop and tell the user.
 
 ## Progress bar
@@ -70,10 +70,10 @@ Rules:
 3. Break the work into **tasks** with:
    - a clear, self-contained brief (what, where, constraints, definition of done, how to verify);
    - explicit dependencies between tasks;
-   - a **tier** per task (section 3);
+   - a **tier** per task (section 3), with the trigger that justifies any Careful task;
    - a **kind** per task: `subagent` or `session` (section 4a). Only when session mode is available (section 4a); otherwise every task is a subagent;
    - a **provider** per task, when savvy-limits is installed (Capacity). A Gemini task has a track and size instead of a Claude tier. For the progress bar its tier names the model `gemini.recommendations` picks: `neon-low` to `neon-xhigh`, `hydrogen-low` to `hydrogen-xhigh`, or `argon-low` to `argon-high`. Use `gemini` for any other Gemini model.
-4. Present the plan to the user in a compact form: numbered tasks, tier, kind, dependency order. With savvy-limits, start it with one capacity line (`Capacity: Claude 5h 87% · wk 65% (use first) | Gemini 5h 95% · wk 99%`) and mark each Gemini task. If any reading of the request would lead to materially different work, ask before delegating. Otherwise proceed. When the plan has session tasks, end it with one line saying so (`Tasks 2, 4 and 5 run as their own sessions.`): the user's go-ahead on that plan is their request to start them.
+4. Present the plan to the user in a compact form: numbered tasks, tier (a Careful task names its trigger: `Careful: save format`), kind, dependency order. With savvy-limits, start it with one capacity line (`Capacity: Claude 5h 87% · wk 65% (use first) | Gemini 5h 95% · wk 99%`) and mark each Gemini task. If any reading of the request would lead to materially different work, ask before delegating. Otherwise proceed. When the plan has session tasks, end it with one line saying so (`Tasks 2, 4 and 5 run as their own sessions.`): the user's go-ahead on that plan is their request to start them.
 
 ## 1a. New project (greenfield)
 
@@ -106,26 +106,38 @@ Design decisions are yours. Workers never invent UI, except as the two delegated
 
 Pick the cheapest tier that will get the task right the first time. Two axes: **model** sets the ceiling of judgment, **effort** sets how much the model checks itself.
 
-**Default to Medium (Opus / medium).** It is the best middle ground and should carry most of the work. **Careful (Opus / high) is the normal ceiling**, including for bugs. **Heavy (xhigh) and Fable are exception tiers**: avoid them unless the user asks for them, or a task has already failed at Careful (section 5, after its return rounds).
+**What a worker costs.** Mostly its turns times its context, not its price per token. Every worker starts cold and reads the code again, and more effort means more turns. Per-token prices differ by about 2x between tiers, but in measured runs a Careful task cost about 2.5x a Medium task, and a Heavy or Fable task about 4.5x. So the lowest tier that fits wins, and a brief that names the exact files and the check that proves the task done saves more than any tier choice.
+
+**Your model sets the lane.**
+- **You run on Fable:** Opus and Sonnet workers cost less per token than you do. Use the tiers below as they stand.
+- **You run on Opus or lower:** an Opus worker costs what your own tokens cost, and a Fable worker twice that. Delegate for parallel work and a clean context, not for a cheaper rate: hold tiers to the defaults below, and run Fable workers only when the user asks.
+
+**Defaults.** Work you can specify fully goes to **Swarm (Sonnet / medium)**. Work that needs judgment about the codebase goes to **Medium (Opus / medium)**, which carries most of it. **Careful (Opus / high) runs only on a trigger** (below), named in the plan. **Heavy (xhigh) and Fable are exception tiers**: avoid them unless the user asks for them, or a task has already failed at Careful (section 5, after its return rounds).
+
+**Careful triggers.** Careful is for a worker that must itself get one of these right, beyond what its brief can pin down:
+1. an invariant across files or releases: a data or save format, a public API, a migration path;
+2. concurrency, ordering or timing;
+3. a refactor that spans several modules;
+4. security or data-loss risk;
+5. a bug whose cause is still unclear (investigation).
 
 | Tier | Agent | Model / effort | Use for |
 |------|-------|----------------|---------|
 | Fable | `savvy-fable` | Fable / high | Exception tier, avoid by default. "Hardest problems": very complex logic (subtle algorithms, concurrency, many interacting states), hard bugs that resist ordinary debugging or survived a Heavy investigation; targeted design features, only when the user asks (section 2) |
 | Heavy | `savvy-heavy` | Opus / xhigh | Exception tier, avoid by default; only after Careful failed or on request. "Understand and find": unfamiliar or messy code, unclear root cause, non-obvious architecture, large contexts, anything where a wrong first approach is expensive |
-| Careful | `savvy-careful` | Opus / high | Normal ceiling, including bugs. "Do it right": the approach is clear but execution is delicate. Multi-file refactors, fixes that must preserve invariants, logic with many edge cases, concurrency |
-| Medium | `savvy-medium` | Opus / medium | **Default tier.** Standard feature work, bug fixes with a known cause, changes confined to a few files with clear requirements |
+| Careful | `savvy-careful` | Opus / high | **Only on a trigger** (above), including bugs whose cause is unclear. "Do it right": the approach is clear but execution is delicate |
+| Medium | `savvy-medium` | Opus / medium | **Default for work that needs judgment about the codebase.** Standard feature work, bug fixes with a known cause, changes confined to a few files with clear requirements |
 | Light | `savvy-light` | Opus / low | Mechanical edits, renames, boilerplate, config, small isolated fixes, running builds/tests and reporting |
-| Swarm | `savvy-swarm` | Sonnet / medium | Narrow, fully specified coding tasks fanned out in parallel: one function, component, endpoint, test file or migration per worker, with exact files and acceptance checks. Cheap enough to run many at once; you review each closely |
+| Swarm | `savvy-swarm` | Sonnet / medium | **Default for fully specified work**, alone or many in parallel: one function, component, endpoint or test file per worker, with exact files, behaviour, edge cases and the check that proves it done. Also implements a brief that a Careful investigation wrote. You review each closely |
 | Tester | `savvy-tester` | Sonnet / high | Independent testing of accepted-candidate work: writes and runs tests, exercises the change end to end, hunts edge cases and regressions, reports failures with repro steps. Never fixes product code |
 | Gemini | `gemini-worker` runner | Chosen from quota by track and size | Self-contained file edits and read-only reviews on the Gemini quota, or full edit/build/test/commit/resume `code` tasks when `<project>/.savvy/gemini.json` provides scoped commands (section 4b). Only with savvy-limits installed |
 
 Heuristics:
-- No clear reason to go lower or higher → Medium.
-- Uncertain between Medium and Careful → Careful. Uncertain between Careful and anything above → Careful.
-- Bugs: known cause → Medium; unclear cause or delicate fix → Careful. Escalate to Heavy only after Careful failed, and to Fable only after Heavy failed or on the user's request.
-- Investigation with an unclear root cause also starts on Careful. A task that needs both investigation and delicate implementation is two tasks: Careful investigates and writes a precise brief, Medium or Careful implements it.
+- Can you write the whole brief: exact files, signatures, behaviour, edge cases and the check that proves it done? → Swarm. Unsure whether you can → Medium. No judgment at all (rename, config, run the build) → Light.
+- Medium or Careful: Careful only when a trigger applies; name it in the plan. Uncertain and no trigger → Medium: a wrong first attempt costs one return round, which is cheaper than running every task at high effort. Never go above Careful because of uncertainty.
+- Bugs: known cause → Swarm when you can spell out the fix, otherwise Medium. Unclear cause → two tasks: Careful investigates (trigger 5) and writes a precise brief, then Swarm or Medium implements it. Escalate to Heavy only after Careful failed, and to Fable only after Heavy failed or on the user's request.
 - Split "investigate" and "implement" if the investigation result changes the plan.
-- Swarm vs Light/Medium: Swarm when the work splits into several small, independent, file-disjoint pieces whose briefs you can fully specify (signatures, behaviour, edge cases, the test to pass). Anything needing judgment about the codebase stays on an Opus tier.
+- Escalation goes one tier at a time: Swarm → Medium → Careful → Heavy → Fable (section 5).
 - Never delegate final judgment (section 5) to any tier. Design is delegated only as section 2 allows: to `savvy-fable` on the user's explicit request, or to a Gemini worker on the Gemini design track.
 
 ## 4. Delegate
@@ -136,12 +148,12 @@ Heuristics:
 - Keep briefs tight. Do not paste the whole plan; paste this task.
 ### Swarming
 
-When a feature splits into many small pieces, fan out `savvy-swarm` (and `savvy-tester`) workers in one message instead of chaining Opus workers:
+A single fully specified task goes to `savvy-swarm` like to any other tier. When a feature splits into many small pieces, fan out `savvy-swarm` (and `savvy-tester`) workers in one message instead of chaining Opus workers:
 1. Settle the shared parts first, yourself or on an Opus tier: interfaces, types, shared config, file layout. Swarm workers never create or change shared code.
 2. Give each swarm worker a disjoint file list. Two workers never edit the same file; if two pieces need one file, they are one task.
 3. Each brief is complete on its own: exact files, signatures, behaviour, edge cases, and the check that proves it done.
 4. Testers can swarm too: one `savvy-tester` per area (module, endpoint, flow), each briefed with the paths and risks it covers.
-5. Keep a swarm to about 3-8 workers per wave. Review the wave (section 5) before launching the next; return defects to the same swarm worker once, then escalate to Medium or Careful.
+5. Keep a swarm to about 3-8 workers per wave. Review the wave (section 5) before launching the next; return defects to the same swarm worker once, then escalate one tier, to Medium.
 6. After the wave, run the full build and test suite once yourself or via `savvy-light`, since swarm workers only ran checks scoped to their own files.
 
 - Do not implement in parallel with workers. While they run, prepare the next briefs or the review checklist.
@@ -249,7 +261,7 @@ For each returned task:
 5. Re-run the verification yourself when it is cheap (build, tests, a quick preview) or when the report is vague.
 6. Outcome per task:
    - **Accept**;
-   - **Return** to the same or a higher tier with a precise list of defects (not a re-explanation of the task); escalate one step at a time (Medium → Careful → Heavy → Fable), never skipping;
+   - **Return** to the same or a higher tier with a precise list of defects (not a re-explanation of the task); escalate one step at a time (Swarm → Medium → Careful → Heavy → Fable), never skipping;
    - **Escalate**: take over only for design fixes or one-line corrections where a round trip would cost more than the fix.
 
 Cap at two return rounds per task; after that, re-plan or ask the user.

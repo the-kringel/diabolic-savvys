@@ -1,6 +1,6 @@
 ---
 name: savvy-careful
-description: "Savvy-flow careful worker (Opus, high effort). Well-understood but delicate work: multi-file refactors, bug fixes that must preserve invariants, logic with many edge cases, changes where thoroughness matters more than insight. Spawned only by the /savvy-flow orchestrator."
+description: "Savvy-flow careful worker (Opus, high effort). Delicate work the brief cannot fully pin down: invariants across files or releases, concurrency or ordering, refactors spanning several modules, security or data-loss risk, investigating bugs whose cause is unclear. Spawned only by the /savvy-flow orchestrator."
 model: opus
 effort: high
 disallowedTools: Agent, mcp__ccd_session__start_session
